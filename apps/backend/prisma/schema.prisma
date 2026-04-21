@@ -1,0 +1,161 @@
+// apps/backend/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Users ───────────────────────────────────────────────
+
+model User {
+  id        String   @id // Clerk userId
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedWorkspaces      Workspace[]            @relation("WorkspaceOwner")
+  memberships          WorkspaceMember[]
+  joinRequests         WorkspaceJoinRequest[] @relation("UserJoinRequests")
+  reviewedJoinRequests WorkspaceJoinRequest[] @relation("UserReviewedJoinRequests")
+  startedSessions      Session[]              @relation("SessionStarter")
+  participations       SessionParticipant[]
+  actionItems          ActionItem[]
+}
+
+// ─── Workspaces ──────────────────────────────────────────
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  ownerId   String
+  createdAt DateTime @default(now())
+
+  owner        User                   @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members      WorkspaceMember[]
+  joinRequests WorkspaceJoinRequest[]
+  sessions     Session[]
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        String   @default("member") // 'owner' | 'admin' | 'member'
+  joinedAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+}
+
+model WorkspaceJoinRequest {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  userId       String
+  message      String?
+  status       String    @default("pending") // 'pending' | 'approved' | 'rejected'
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user       User      @relation("UserJoinRequests", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User?     @relation("UserReviewedJoinRequests", fields: [reviewedById], references: [id])
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId, status])
+}
+
+// ─── Sessions ────────────────────────────────────────────
+
+model Session {
+  id          String    @id @default(uuid())
+  workspaceId String
+  areaTag     String // 'meeting' | 'working' | 'resting' | 'knowledge'
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  startedById String
+
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  startedBy    User                 @relation("SessionStarter", fields: [startedById], references: [id])
+  participants SessionParticipant[]
+  transcripts  Transcript[]
+  summary      Summary?
+  actionItems  ActionItem[]
+}
+
+model SessionParticipant {
+  sessionId String
+  userId    String
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@id([sessionId, userId])
+}
+
+// ─── Transcripts ─────────────────────────────────────────
+
+model Transcript {
+  id           String   @id @default(uuid())
+  sessionId    String
+  speakerLabel String // 'Speaker 1' | 'Speaker 2' etc — AI assigned
+  text         String
+  timestamp    DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+// ─── Summaries ───────────────────────────────────────────
+
+model Summary {
+  id            String   @id @default(uuid())
+  sessionId     String   @unique
+  decisions     String[]
+  openQuestions String[]
+  risks         String[]
+  raw           Json?
+  createdAt     DateTime @default(now())
+
+  session     Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  actionItems ActionItem[]
+}
+
+// ─── Action Items ─────────────────────────────────────────
+
+model ActionItem {
+  id        String    @id @default(uuid())
+  sessionId String
+  summaryId String?
+  title     String
+  ownerId   String?
+  dueDate   DateTime?
+  priority  String    @default("medium") // 'low' | 'medium' | 'high'
+  status    String    @default("open") // 'open' | 'done'
+  createdAt DateTime  @default(now())
+
+  session Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  summary Summary? @relation(fields: [summaryId], references: [id])
+  owner   User?    @relation(fields: [ownerId], references: [id])
+}
+
+// ─── Embeddings ──────────────────────────────────────────
+
+model Embedding {
+  id         String   @id @default(uuid())
+  sourceId   String // sessionId or summaryId
+  sourceType String // 'transcript' | 'summary'
+  content    String
+  createdAt  DateTime @default(now())
+
+  @@index([sourceId])
+}
