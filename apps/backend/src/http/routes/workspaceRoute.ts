@@ -110,6 +110,11 @@ workspaceRoute.post("/", async (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
+    const userExists = await ensureUserExists(userId);
+    if (!userExists) {
+        return res.status(404).json({ error: "User not found" });
+    }
+
     const name = String(req.body?.name || "").trim();
     if (!name) {
         return res.status(400).json({ error: "Workspace name is required" });
@@ -118,24 +123,18 @@ workspaceRoute.post("/", async (req, res) => {
     const slug = String(req.body?.slug || "").trim() || toSlug(name);
 
     try {
-        const workspace = await db.$transaction(async (tx) => {
-            const createdWorkspace = await tx.workspace.create({
-                data: {
-                    name,
-                    slug,
-                    ownerId: userId,
+        const workspace = await db.workspace.create({
+            data: {
+                name,
+                slug,
+                ownerId: userId,
+                members: {
+                    create: {
+                        userId,
+                        role: "owner",
+                    },
                 },
-            });
-
-            await tx.workspaceMember.create({
-                data: {
-                    userId,
-                    workspaceId: createdWorkspace.id,
-                    role: "owner",
-                },
-            });
-
-            return createdWorkspace;
+            },
         });
 
         return res.status(201).json({ workspace });
@@ -144,7 +143,7 @@ workspaceRoute.post("/", async (req, res) => {
         if (message.includes("Unique constraint")) {
             return res.status(409).json({ error: "Slug already exists. Please choose a different name." });
         }
-        return res.status(400).json({ error: "Failed to create workspace" });
+        return res.status(400).json({ error: message });
     }
 });
 
@@ -357,3 +356,5 @@ workspaceRoute.delete("/:workspaceId/members/:memberId", async (req, res) => {
 });
 
 workspaceRoute.use('/:workspaceId', zoneRoute);
+
+
