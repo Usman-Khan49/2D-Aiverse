@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { FormEvent } from "react";
 
 import { WorkspaceRoom } from "./workspace";
@@ -9,63 +9,35 @@ import { JoinWorkspaceDialog } from "../components/JoinWorkspaceDialog";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
 import { StatusMessages } from "../components/StatusMessages";
 import { parseWorkspaceInput } from "../utils/workspaceUtils";
+import { useDashboardStore } from "../store/useDashboardStore";
+import type { Workspace, WorkspaceMember } from "../store/useDashboardStore";
 import "../App.css";
-
-type Workspace = {
-  id: string;
-  name: string;
-  slug: string;
-  ownerId: string;
-  createdAt: string;
-  role?: string | null;
-};
-
-type WorkspaceMember = {
-  workspaceId: string;
-  userId: string;
-  role: string;
-  joinedAt: string;
-  user: {
-    id: string;
-    email: string;
-    name: string | null;
-    avatarUrl: string | null;
-  };
-};
-
-type View = "landing" | "dashboard" | "workspace";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ??
   "http://localhost:4000/api/v1";
 
-
-
 export function Dashboard() {
   const { getToken, isLoaded } = useAuth();
   const { user } = useUser();
 
-  // View & Navigation
-  const [view, setView] = useState<View>("landing");
-
-  // Workspace Data
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
-  const [selectedMembers, setSelectedMembers] = useState<WorkspaceMember[]>([]);
-
-  // Dialog States
-  const [showJoinDialog, setShowJoinDialog] = useState(false);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [joinInput, setJoinInput] = useState("");
-  const [createName, setCreateName] = useState("");
-
-  // Loading & Feedback States
-  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
+  // Zustand Store
+  const {
+    view, setView,
+    workspaces, setWorkspaces,
+    selectedWorkspace, setSelectedWorkspace,
+    selectedMembers, setSelectedMembers,
+    showJoinDialog, setShowJoinDialog,
+    showCreateDialog, setShowCreateDialog,
+    joinInput, setJoinInput,
+    createName, setCreateName,
+    loadingWorkspaces, setLoadingWorkspaces,
+    loadingMembers, setLoadingMembers,
+    submitting, setSubmitting,
+    error, setError,
+    success, setSuccess,
+    resetFeedback
+  } = useDashboardStore();
 
   // Computed Values
   const displayName = useMemo(() => {
@@ -158,7 +130,7 @@ export function Dashboard() {
     } finally {
       setLoadingWorkspaces(false);
     }
-  }, [apiFetch, isLoaded]);
+  }, [apiFetch, isLoaded, setLoadingWorkspaces, setError, setWorkspaces]);
 
   const loadMembers = useCallback(
     async (workspaceId: string) => {
@@ -180,7 +152,7 @@ export function Dashboard() {
         setLoadingMembers(false);
       }
     },
-    [apiFetch],
+    [apiFetch, setLoadingMembers, setError, setSelectedMembers],
   );
 
   useEffect(() => {
@@ -211,8 +183,7 @@ export function Dashboard() {
     }
 
     setSubmitting(true);
-    setError(null);
-    setSuccess(null);
+    resetFeedback();
 
     try {
       const data = await apiFetch<{ workspace: Workspace }>("/workspaces/join", {
@@ -244,8 +215,7 @@ export function Dashboard() {
     }
 
     setSubmitting(true);
-    setError(null);
-    setSuccess(null);
+    resetFeedback();
 
     try {
       const data = await apiFetch<{ workspace: Workspace }>("/workspaces", {
@@ -352,4 +322,4 @@ export function Dashboard() {
       />
     </div>
   );
-}
+}

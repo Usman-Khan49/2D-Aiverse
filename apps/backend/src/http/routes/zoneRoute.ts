@@ -4,13 +4,13 @@ import { Router,Response,Request } from "express";
 export const zoneRoute = Router();
 
   
-zoneRoute.get('/zones ', (req:Request,res:Response)=>{
+zoneRoute.get('/zones', (req:Request,res:Response)=>{
     res.json({ zones: [] });
 })
 
 zoneRoute.post('/zones', (req:Request,res:Response)=>{
     res.json({ message: 'Zone created' });
-} )
+})
 
 zoneRoute.get('/zones/:zoneId', (req:Request,res:Response)=>{   
     const { zoneId } = req.params;
