@@ -47,6 +47,21 @@ export async function handleMessage(ws: WorkspaceSocket, raw: unknown, routeWork
 		handlePlayerMovement(ws, data, routeWorkspaceId);
 		return;
 	}
+	if (data.type === "WEBRTC_SIGNAL") {
+		handleWebRtcSignal(ws, data, routeWorkspaceId);
+		return;
+	}
+	if (data.type === "GET_CURRENT_PLAYERS") {
+		sendCurrentPlayers(ws, routeWorkspaceId);
+		return;
+	}
+	if (data.type === "CALL_REQUEST" || data.type === "CALL_ACCEPTED" || data.type === "CALL_DECLINED") {
+		handleCallNegotiation(ws, data, routeWorkspaceId);
+		return;
+	}
+
+
+
 	sendJson(ws, {
 		type: "ERROR",
 		payload: {
@@ -123,8 +138,10 @@ async function handleAuth(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId
 			return;
 		}
 
-		ws.userId = userId;
+		// Append a random string so multiple tabs from the same account don't collide
+		ws.userId = userId + "_" + Math.random().toString(36).substring(2, 9);
 		ws.authenticated = true;
+
 		if (ws.authTimeout) {
 			clearTimeout(ws.authTimeout);
 			ws.authTimeout = undefined;
@@ -140,36 +157,22 @@ async function handleAuth(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId
 			type: "CONNECTED",
 			payload: {
 				workspaceId: routeWorkspaceId,
-				userId,
+				userId: ws.userId,
 			},
 		});
 
 		const room = getRoom(routeWorkspaceId);
 		if (room) {
-			// Send all existing players to the new connection
-			const currentPlayers: any[] = [];
-			for (const client of room) {
-				if (client.userId && client.userId !== userId) {
-					currentPlayers.push({
-						userId: client.userId,
-						x: client.x,
-						y: client.y,
-						anim: client.anim,
-					});
-				}
-			}
-			sendJson(ws, {
-				type: "CURRENT_PLAYERS",
-				payload: { players: currentPlayers } as any, // Cast to any since WsMessage doesn't perfectly fit array yet, but JSON stringify works
-			});
+			sendCurrentPlayers(ws, routeWorkspaceId);
 
 			// Broadcast to others that this player joined
+
 			for (const client of room) {
 				if (client !== ws) {
 					sendJson(client, {
 						type: "NEW_PLAYER",
 						payload: {
-							userId,
+							userId: ws.userId,
 							x: ws.x,
 							y: ws.y,
 							anim: ws.anim,
@@ -278,4 +281,65 @@ function handleJoinWorkspace(ws: WorkspaceSocket, data: WsMessage, routeWorkspac
 
 	joinWorkspace(ws, nextWorkspaceId);
 	sendJson(ws, { type: "JOINED", payload: { workspaceId: nextWorkspaceId } });
+}
+
+function handleWebRtcSignal(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId: string) {
+	const { targetUserId, signal } = data.payload || {};
+	if (!targetUserId || !signal) return;
+
+	const room = getRoom(routeWorkspaceId);
+	if (!room) return;
+
+	// Find the target user in the same room
+	const targetClient = Array.from(room).find(c => (c as WorkspaceSocket).userId === targetUserId);
+
+	if (targetClient) {
+		sendJson(targetClient as WorkspaceSocket, {
+			type: "WEBRTC_SIGNAL",
+			payload: {
+				userId: ws.userId, // Who sent the signal
+				signal: signal
+			}
+		});
+	}
+}
+
+function sendCurrentPlayers(ws: WorkspaceSocket, routeWorkspaceId: string) {
+	const room = getRoom(routeWorkspaceId);
+	if (!room) return;
+
+	const currentPlayers: any[] = [];
+	for (const client of room) {
+		if (client.userId && client.userId !== ws.userId) {
+			currentPlayers.push({
+				userId: client.userId,
+				x: client.x,
+				y: client.y,
+				anim: client.anim,
+			});
+		}
+	}
+	sendJson(ws, {
+		type: "CURRENT_PLAYERS",
+		payload: { players: currentPlayers } as any,
+	});
+}
+
+function handleCallNegotiation(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId: string) {
+	const { targetUserId } = data.payload || {};
+	if (!targetUserId) return;
+
+	const room = getRoom(routeWorkspaceId);
+	if (!room) return;
+
+	const targetClient = Array.from(room).find(c => (c as WorkspaceSocket).userId === targetUserId);
+
+	if (targetClient) {
+		sendJson(targetClient as WorkspaceSocket, {
+			type: data.type as string,
+			payload: {
+				userId: ws.userId, // Who sent this
+			}
+		});
+	}
 }

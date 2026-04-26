@@ -1,4 +1,6 @@
 import * as Phaser from "phaser";
+import { WebRTCManager } from "../managers/WebRTCManager";
+
 
 export class MainScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -9,6 +11,23 @@ export class MainScene extends Phaser.Scene {
   private lastX = 0;
   private lastY = 0;
   private lastAnim = "turn";
+  
+  private rtcManager: WebRTCManager | null = null;
+  private myUserId: string | null = null;
+  private wsMessageListener = this.handleWsMessage.bind(this);
+  private initiateCallListener = (e: Event) => {
+    const targetUserId = (e as CustomEvent).detail.userId;
+    this.rtcManager?.sendCallRequest(targetUserId);
+  };
+  private acceptCallListener = (e: Event) => {
+    const targetUserId = (e as CustomEvent).detail.userId;
+    this.rtcManager?.acceptCall(targetUserId);
+  };
+  private declineCallListener = (e: Event) => {
+    const targetUserId = (e as CustomEvent).detail.userId;
+    this.rtcManager?.declineCall(targetUserId);
+  };
+
 
   constructor() {
     super("MainScene");
@@ -17,13 +36,55 @@ export class MainScene extends Phaser.Scene {
   init(data: { socket: WebSocket | null }) {
     this.socket = data.socket;
     
+    // Initialize WebRTC Manager (don't call initLocalStream yet — wait for user gesture)
+    this.rtcManager = new WebRTCManager(this.socket, this.myUserId);
+
+    // If this scene is restarted, remove stale listeners before adding new ones.
+    this.cleanupEventListeners();
+
     // Listen for custom events from the React component
-    window.addEventListener("ws-message", this.handleWsMessage.bind(this));
+    window.addEventListener("ws-message", this.wsMessageListener);
+    window.addEventListener("initiate-call", this.initiateCallListener);
+    window.addEventListener("accept-call", this.acceptCallListener);
+    window.addEventListener("decline-call", this.declineCallListener);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupEventListeners, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.cleanupEventListeners, this);
   }
+
+
+
+  public updateSocket(socket: WebSocket) {
+    this.socket = socket;
+    if (this.rtcManager) {
+      this.rtcManager.setSocket(socket);
+    }
+    
+    // Once socket is available, ask for players just in case we missed the broadcast
+    if (this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({ type: "GET_CURRENT_PLAYERS" }));
+    }
+  }
+
+
+
+
 
   private handleWsMessage(e: Event) {
     const customEvent = e as CustomEvent;
     const data = customEvent.detail;
+
+    if (data.type === "CONNECTED") {
+      this.myUserId = data.payload.userId;
+      // Update the existing manager with the correct userId and socket
+      // Don't recreate it — the event listeners reference this.rtcManager
+      if (this.rtcManager) {
+        this.rtcManager.setMyUserId(this.myUserId);
+        this.rtcManager.setSocket(this.socket);
+      } else {
+        this.rtcManager = new WebRTCManager(this.socket, this.myUserId);
+      }
+    }
 
     if (data.type === "CURRENT_PLAYERS") {
       data.payload.players.forEach((p: any) => {
@@ -33,7 +94,25 @@ export class MainScene extends Phaser.Scene {
       });
     } else if (data.type === "NEW_PLAYER") {
       this.addOtherPlayer(data.payload);
+    } else if (data.type === "WEBRTC_SIGNAL") {
+      this.rtcManager?.handleSignal(data.payload.userId, data.payload.signal);
+    } else if (data.type === "CALL_REQUEST") {
+      // Someone wants to call us — show the incoming call UI
+      console.log(`Call request from ${data.payload.userId}`);
+      window.dispatchEvent(new CustomEvent("incoming-call", { 
+        detail: { userId: data.payload.userId } 
+      }));
+    } else if (data.type === "CALL_ACCEPTED") {
+      // Our call was accepted — now start WebRTC as initiator
+      console.log(`Call accepted by ${data.payload.userId}`);
+      window.dispatchEvent(new CustomEvent("call-status", { detail: { status: "Connecting..." } }));
+      this.rtcManager?.startCallAsInitiator(data.payload.userId);
+    } else if (data.type === "CALL_DECLINED") {
+      console.log(`Call declined by ${data.payload.userId}`);
+      window.dispatchEvent(new CustomEvent("call-status", { detail: { status: "Call Declined" } }));
     } else if (data.type === "PLAYER_MOVED") {
+
+
       const p = data.payload;
       const sprite = this.otherPlayers.get(p.userId);
       if (sprite) {
@@ -41,20 +120,40 @@ export class MainScene extends Phaser.Scene {
         if (p.anim) sprite.anims.play(p.anim, true);
       }
     } else if (data.type === "PLAYER_LEFT") {
-      const sprite = this.otherPlayers.get(data.payload.userId);
+      const userId = data.payload.userId;
+      const sprite = this.otherPlayers.get(userId);
       if (sprite) {
         sprite.destroy();
-        this.otherPlayers.delete(data.payload.userId);
+        this.otherPlayers.delete(userId);
       }
+      this.rtcManager?.removePlayer(userId);
     }
+
+  }
+
+  private cleanupEventListeners() {
+    window.removeEventListener("ws-message", this.wsMessageListener);
+    window.removeEventListener("initiate-call", this.initiateCallListener);
+    window.removeEventListener("accept-call", this.acceptCallListener);
+    window.removeEventListener("decline-call", this.declineCallListener);
   }
 
   private addOtherPlayer(p: any) {
     const sprite = this.physics.add.sprite(p.x, p.y, "player");
     sprite.setScale(0.5);
     if (p.anim) sprite.anims.play(p.anim, true);
+    
+    // Make interactive
+    sprite.setInteractive({ cursor: 'pointer' });
+    sprite.on('pointerdown', () => {
+      window.dispatchEvent(new CustomEvent("player-selected", { 
+        detail: { userId: p.userId } 
+      }));
+    });
+
     this.otherPlayers.set(p.userId, sprite);
   }
+
 
   preload() {
     // Load player spritesheet
@@ -69,7 +168,7 @@ export class MainScene extends Phaser.Scene {
 
   private generateTextures() {
     const createTileTexture = (key: string, color: number, pattern?: (g: Phaser.GameObjects.Graphics) => void) => {
-      const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+      const graphics = this.make.graphics({ x: 0, y: 0 });
       graphics.fillStyle(color, 1);
       graphics.fillRect(0, 0, 16, 16);
       if (pattern) pattern(graphics);
@@ -94,7 +193,7 @@ export class MainScene extends Phaser.Scene {
       g.fillRect(2, 2, 12, 12);
     });
 
-    const bushGraphics = this.make.graphics({ x: 0, y: 0, add: false });
+    const bushGraphics = this.make.graphics({ x: 0, y: 0 });
     bushGraphics.fillStyle(0x166534, 1);
     bushGraphics.fillCircle(8, 8, 8);
     bushGraphics.generateTexture("bush", 16, 16);

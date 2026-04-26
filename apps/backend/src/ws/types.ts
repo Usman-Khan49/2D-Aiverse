@@ -23,5 +23,8 @@ export type WsMessage = {
 		y?: number;
 		anim?: string;
 		userId?: string;
+		targetUserId?: string;
+		signal?: any;
 	};
 };
+

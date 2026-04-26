@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebRTC Local Test</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 40px; }
+    button { padding: 12px 24px; font-size: 16px; cursor: pointer; margin: 10px; border-radius: 8px; border: none; }
+    #start { background: #10b981; color: white; }
+    #log { background: #0d1117; padding: 20px; border-radius: 8px; margin-top: 20px; max-height: 400px; overflow-y: auto; }
+    .ok { color: #10b981; }
+    .err { color: #ef4444; }
+    .info { color: #60a5fa; }
+  </style>
+</head>
+<body>
+  <h1>WebRTC Local Test (No Server Needed)</h1>
+  <p>This creates two WebRTC peers in the same page and sends a 440Hz tone between them.</p>
+  <button id="start" onclick="runTest()">▶ Run Test</button>
+  <div id="log"></div>
+
+  <script>
+    function log(msg, cls = 'info') {
+      const d = document.getElementById('log');
+      d.innerHTML += `<div class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+      d.scrollTop = d.scrollHeight;
+    }
+
+    async function runTest() {
+      document.getElementById('start').disabled = true;
+      log('Creating test tone (440Hz)...');
+
+      // Create a test tone stream
+      const audioCtx = new AudioContext();
+      const osc = audioCtx.createOscillator();
+      osc.frequency.value = 440;
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.15;
+      const dest = audioCtx.createMediaStreamDestination();
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start();
+      const testStream = dest.stream;
+
+      log(`Test tone stream created. Audio tracks: ${testStream.getAudioTracks().length}`, 'ok');
+
+      // Create Peer A (initiator)
+      const configA = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+      const pcA = new RTCPeerConnection(configA);
+      
+      // Create Peer B (receiver)
+      const configB = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+      const pcB = new RTCPeerConnection(configB);
+
+      // Add the test tone track to Peer A
+      testStream.getTracks().forEach(track => {
+        pcA.addTrack(track, testStream);
+        log(`Peer A: Added track (kind: ${track.kind}, enabled: ${track.enabled})`);
+      });
+
+      // ICE candidate exchange
+      pcA.onicecandidate = (e) => {
+        if (e.candidate) {
+          log('Peer A → ICE candidate → Peer B');
+          pcB.addIceCandidate(e.candidate);
+        }
+      };
+      pcB.onicecandidate = (e) => {
+        if (e.candidate) {
+          log('Peer B → ICE candidate → Peer A');
+          pcA.addIceCandidate(e.candidate);
+        }
+      };
+
+      // Connection state
+      pcA.onconnectionstatechange = () => log(`Peer A connection: ${pcA.connectionState}`, pcA.connectionState === 'connected' ? 'ok' : 'info');
+      pcB.onconnectionstatechange = () => log(`Peer B connection: ${pcB.connectionState}`, pcB.connectionState === 'connected' ? 'ok' : 'info');
+
+      // When Peer B receives the track
+      pcB.ontrack = (event) => {
+        log(`Peer B: Received track! Kind: ${event.track.kind}, Muted: ${event.track.muted}`, 'ok');
+        
+        const audio = document.createElement('audio');
+        audio.autoplay = true;
+        audio.controls = true;
+        audio.srcObject = event.streams[0];
+        audio.style.display = 'block';
+        audio.style.marginTop = '20px';
+        document.body.appendChild(audio);
+
+        audio.play().then(() => {
+          log('✅ AUDIO IS PLAYING! If you hear a beep, WebRTC works!', 'ok');
+        }).catch(e => {
+          log(`❌ audio.play() failed: ${e.message}`, 'err');
+        });
+
+        event.track.onunmute = () => log('Peer B: Track UNMUTED - data flowing!', 'ok');
+        event.track.onmute = () => log('Peer B: Track MUTED', 'err');
+      };
+
+      // SDP exchange
+      log('Creating offer...');
+      const offer = await pcA.createOffer();
+      await pcA.setLocalDescription(offer);
+      log('Peer A: Offer created and set as local description');
+
+      await pcB.setRemoteDescription(offer);
+      log('Peer B: Offer set as remote description');
+
+      const answer = await pcB.createAnswer();
+      await pcB.setLocalDescription(answer);
+      log('Peer B: Answer created and set as local description');
+
+      await pcA.setRemoteDescription(answer);
+      log('Peer A: Answer set as remote description');
+
+      log('Waiting for connection...', 'info');
+    }
+  </script>
+</body>
+</html>

@@ -32,6 +32,12 @@ export function WorkspaceRoom({
   const [inputMessage, setInputMessage] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
   const [activeSocket, setActiveSocket] = useState<WebSocket | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [incomingCallUserId, setIncomingCallUserId] = useState<string | null>(null);
+  const [callStatus, setCallStatus] = useState<string | null>(null);
+
+
+
 
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/workspaces/${workspace.slug || workspace.id}`;
@@ -100,7 +106,8 @@ export function WorkspaceRoom({
             setConnectionStatus("connected");
             setActiveSocket(socket); // Set active socket for Phaser
             console.log(`Successfully connected to workspace room: ${data.payload?.workspaceId}`);
-            return;
+            // Don't return — let it fall through to dispatch ws-message to Phaser
+            // so the scene can pick up myUserId
           }
 
           if (data.type === "JOINED") {
@@ -152,6 +159,49 @@ export function WorkspaceRoom({
       }
     };
   }, [workspace.id, getToken]);
+
+  useEffect(() => {
+    const handlePlayerSelected = (e: any) => setSelectedPlayerId(e.detail.userId);
+    const handleIncomingCall = (e: any) => setIncomingCallUserId(e.detail.userId);
+    const handleCallStatus = (e: any) => setCallStatus(e.detail.status);
+
+    window.addEventListener("player-selected", handlePlayerSelected);
+    window.addEventListener("incoming-call", handleIncomingCall);
+    window.addEventListener("call-status", handleCallStatus);
+    
+    return () => {
+      window.removeEventListener("player-selected", handlePlayerSelected);
+      window.removeEventListener("incoming-call", handleIncomingCall);
+      window.removeEventListener("call-status", handleCallStatus);
+    };
+
+  }, []);
+
+  const initiateCall = () => {
+    if (selectedPlayerId) {
+      setCallStatus("Dialing...");
+      window.dispatchEvent(new CustomEvent("initiate-call", { detail: { userId: selectedPlayerId } }));
+      setSelectedPlayerId(null);
+    }
+  };
+
+  const acceptCall = () => {
+    if (incomingCallUserId) {
+      setCallStatus("Connecting...");
+      window.dispatchEvent(new CustomEvent("accept-call", { detail: { userId: incomingCallUserId } }));
+      setIncomingCallUserId(null);
+    }
+  };
+
+
+  const declineCall = () => {
+    if (incomingCallUserId) {
+      window.dispatchEvent(new CustomEvent("decline-call", { detail: { userId: incomingCallUserId } }));
+      setIncomingCallUserId(null);
+    }
+  };
+
+
 
   return (
     <div className="workspace-container" style={{ 
@@ -256,7 +306,140 @@ export function WorkspaceRoom({
           </div>
         </div>
 
+        {/* Player Action Dialog - Appears on Right when a player is clicked */}
+        {selectedPlayerId && (
+          <div style={{
+            position: "absolute",
+            right: "20px",
+            top: "100px",
+            width: "250px",
+            background: "white",
+            padding: "20px",
+            borderRadius: "12px",
+            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+            pointerEvents: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "15px",
+            animation: "slideIn 0.3s ease-out"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1em" }}>Player Selected</h3>
+              <button 
+                onClick={() => setSelectedPlayerId(null)}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.2em" }}
+              >
+                &times;
+              </button>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.9em", color: "#666" }}>
+              ID: {selectedPlayerId.substring(0, 15)}...
+            </p>
+            <button
+              onClick={initiateCall}
+              style={{
+                padding: "12px",
+                background: "#10b981",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px"
+              }}
+            >
+              <span style={{ fontSize: "1.2em" }}>📞</span> Call Player
+            </button>
+          </div>
+        )}
+
+        {/* Call Status Indicator */}
+        {callStatus && (
+          <div style={{
+            position: "absolute",
+            left: "50%",
+            top: "10px",
+            transform: "translateX(-50%)",
+            background: callStatus === "Connected!" ? "#10b981" : "#f59e0b",
+            color: "white",
+            padding: "8px 16px",
+            borderRadius: "20px",
+            fontWeight: "bold",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+            zIndex: 100,
+            animation: "fadeIn 0.3s ease-out"
+          }}>
+            {callStatus}
+          </div>
+        )}
+
+        {/* Incoming Call Dialog - Appears on Top Center */}
+
+        {incomingCallUserId && (
+          <div style={{
+            position: "absolute",
+            left: "50%",
+            top: "50px",
+            transform: "translateX(-50%)",
+            width: "300px",
+            background: "white",
+            padding: "20px",
+            borderRadius: "12px",
+            boxShadow: "0 10px 35px rgba(0,0,0,0.3)",
+            pointerEvents: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "15px",
+            animation: "slideDown 0.4s ease-out",
+            zIndex: 100
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+              <h3 style={{ margin: 0, fontSize: "1.2em", color: "#1f2937" }}>Incoming Call 📞</h3>
+              <p style={{ margin: "5px 0", fontSize: "0.9em", color: "#666" }}>
+                Player: {incomingCallUserId.substring(0, 15)}...
+              </p>
+            </div>
+            
+            <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "10px" }}>
+              <button
+                onClick={acceptCall}
+                style={{
+                  padding: "10px 15px",
+                  background: "#10b981",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  flex: 1
+                }}
+              >
+                Accept
+              </button>
+              <button
+                onClick={declineCall}
+                style={{
+                  padding: "10px 15px",
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  flex: 1
+                }}
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Chat - Floating at bottom left */}
+
         <div style={{ 
           marginTop: "auto",
           pointerEvents: "auto",

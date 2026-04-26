@@ -7,10 +7,17 @@ export function PhaserGame({ socket }: { socket?: WebSocket | null }) {
   const gameRef = useRef<Phaser.Game | null>(null);
   const socketRef = useRef<WebSocket | null>(socket || null);
 
-  // Update ref when prop changes
+  // Update ref and scene when prop changes
   useEffect(() => {
     socketRef.current = socket || null;
+    if (gameRef.current && socket) {
+      const scene = gameRef.current.scene.getScene("MainScene") as MainScene;
+      if (scene && typeof scene.updateSocket === "function") {
+        scene.updateSocket(socket);
+      }
+    }
   }, [socket]);
+
 
   useEffect(() => {
     if (!containerRef.current) return;
