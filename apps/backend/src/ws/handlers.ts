@@ -43,6 +43,10 @@ export async function handleMessage(ws: WorkspaceSocket, raw: unknown, routeWork
 		handleChatMessage(ws, data, routeWorkspaceId);
 		return;
 	}
+	if (data.type === "PLAYER_MOVEMENT") {
+		handlePlayerMovement(ws, data, routeWorkspaceId);
+		return;
+	}
 	sendJson(ws, {
 		type: "ERROR",
 		payload: {
@@ -126,6 +130,11 @@ async function handleAuth(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId
 			ws.authTimeout = undefined;
 		}
 
+		// Set default position
+		ws.x = 400;
+		ws.y = 300;
+		ws.anim = "turn";
+
 		joinWorkspace(ws, routeWorkspaceId);
 		sendJson(ws, {
 			type: "CONNECTED",
@@ -134,6 +143,42 @@ async function handleAuth(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId
 				userId,
 			},
 		});
+
+		const room = getRoom(routeWorkspaceId);
+		if (room) {
+			// Send all existing players to the new connection
+			const currentPlayers: any[] = [];
+			for (const client of room) {
+				if (client.userId && client.userId !== userId) {
+					currentPlayers.push({
+						userId: client.userId,
+						x: client.x,
+						y: client.y,
+						anim: client.anim,
+					});
+				}
+			}
+			sendJson(ws, {
+				type: "CURRENT_PLAYERS",
+				payload: { players: currentPlayers } as any, // Cast to any since WsMessage doesn't perfectly fit array yet, but JSON stringify works
+			});
+
+			// Broadcast to others that this player joined
+			for (const client of room) {
+				if (client !== ws) {
+					sendJson(client, {
+						type: "NEW_PLAYER",
+						payload: {
+							userId,
+							x: ws.x,
+							y: ws.y,
+							anim: ws.anim,
+						},
+					});
+				}
+			}
+		}
+
 	} catch (error) {
 		console.error("WebSocket auth failed", error);
 		sendJson(ws, {
@@ -144,6 +189,35 @@ async function handleAuth(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId
 			},
 		});
 		ws.close(1008, "Unauthorized");
+	}
+}
+
+function handlePlayerMovement(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId: string) {
+	const { x, y, anim } = data.payload || {};
+	if (x === undefined || y === undefined) return;
+
+	ws.x = x;
+	ws.y = y;
+	ws.anim = anim || "turn";
+
+	const room = getRoom(routeWorkspaceId);
+	if (!room) return;
+
+	const payload = {
+		type: "PLAYER_MOVED",
+		payload: {
+			userId: ws.userId,
+			x: ws.x,
+			y: ws.y,
+			anim: ws.anim,
+		},
+	};
+
+	// Broadcast to everyone else
+	for (const client of room) {
+		if (client !== ws) {
+			sendJson(client, payload);
+		}
 	}
 }
 

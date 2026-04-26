@@ -31,6 +31,7 @@ export function WorkspaceRoom({
   const [messages, setMessages] = useState<string[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
+  const [activeSocket, setActiveSocket] = useState<WebSocket | null>(null);
 
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/workspaces/${workspace.slug || workspace.id}`;
@@ -92,11 +93,12 @@ export function WorkspaceRoom({
         try {
           const data = JSON.parse(event.data) as {
             type?: string;
-            payload?: { workspaceId?: string; message?: string };
+            payload?: any;
           };
 
           if (data.type === "CONNECTED") {
             setConnectionStatus("connected");
+            setActiveSocket(socket); // Set active socket for Phaser
             console.log(`Successfully connected to workspace room: ${data.payload?.workspaceId}`);
             return;
           }
@@ -116,7 +118,12 @@ export function WorkspaceRoom({
             if (text) {
               setMessages((prev) => [...prev, text]);
             }
+            return;
           }
+
+          // Dispatch all other messages (like CURRENT_PLAYERS, NEW_PLAYER, etc) to window for Phaser to pick up
+          window.dispatchEvent(new CustomEvent("ws-message", { detail: data }));
+          
         } catch (err) {
           console.error("Failed to parse WS message", err);
         }
@@ -126,6 +133,7 @@ export function WorkspaceRoom({
         console.log("WebSocket disconnected");
         if (!closedByUnmount) {
           setConnectionStatus("disconnected");
+          setActiveSocket(null);
         }
       };
 
@@ -154,7 +162,7 @@ export function WorkspaceRoom({
       height: "100vh",
       overflow: "hidden"
     }}>
-      <PhaserGame />
+      <PhaserGame socket={activeSocket} />
       
       <div className="workspace-ui" style={{ 
         position: "absolute", 

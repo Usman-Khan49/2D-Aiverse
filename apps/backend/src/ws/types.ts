@@ -6,6 +6,9 @@ export type WorkspaceSocket = WebSocket & {
 	userId?: string;
 	authenticated?: boolean;
 	authTimeout?: NodeJS.Timeout;
+	x?: number;
+	y?: number;
+	anim?: string;
 };
 
 export type WsMessage = {
@@ -16,5 +19,9 @@ export type WsMessage = {
 		workspaceId?: string;
 		message?: string;
 		ts?: number;
+		x?: number;
+		y?: number;
+		anim?: string;
+		userId?: string;
 	};
 };

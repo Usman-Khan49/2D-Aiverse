@@ -1,9 +1,16 @@
 import { useEffect, useRef } from "react";
 import * as Phaser from "phaser";
+import { MainScene } from "../game/scenes/MainScene";
 
-export function PhaserGame() {
+export function PhaserGame({ socket }: { socket?: WebSocket | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const socketRef = useRef<WebSocket | null>(socket || null);
+
+  // Update ref when prop changes
+  useEffect(() => {
+    socketRef.current = socket || null;
+  }, [socket]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -12,13 +19,10 @@ export function PhaserGame() {
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
       parent: containerRef.current,
-      width: "100%",
-      height: "100%",
-      backgroundColor: "#2c3e50", // A nice slate grey
-      scale: {
-        mode: Phaser.Scale.RESIZE,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-      },
+      width: window.innerWidth,
+      height: window.innerHeight,
+      backgroundColor: "#1a1a2e",
+      pixelArt: true,
       physics: {
         default: "arcade",
         arcade: {
@@ -26,31 +30,26 @@ export function PhaserGame() {
           debug: false,
         },
       },
-      scene: {
-        preload: preload,
-        create: create,
-        update: update,
-      },
+      scene: [MainScene],
     };
-
-    function preload(this: Phaser.Scene) {
-      // Future asset loading
-    }
-
-    function create(this: Phaser.Scene) {
-      // Future character initialization
-      console.log("Phaser Scene Created");
-    }
-
-    function update(this: Phaser.Scene) {
-      // Future game loop logic
-    }
 
     // Initialize the game
     gameRef.current = new Phaser.Game(config);
 
+    // Pass the socket to the scene
+    gameRef.current.scene.start("MainScene", { socket: socketRef.current });
+
+    // Handle window resize
+    const handleResize = () => {
+      if (gameRef.current) {
+        gameRef.current.scale.resize(window.innerWidth, window.innerHeight);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+
     // Clean up on unmount
     return () => {
+      window.removeEventListener("resize", handleResize);
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;

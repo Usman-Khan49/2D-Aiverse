@@ -14,6 +14,19 @@ export const leaveWorkspace = (ws: WorkspaceSocket) => {
 		return;
 	}
 
+	// Broadcast PLAYER_LEFT to everyone else in the room
+	if (ws.userId) {
+		const payload = JSON.stringify({
+			type: "PLAYER_LEFT",
+			payload: { userId: ws.userId },
+		});
+		for (const client of room) {
+			if (client !== ws && client.readyState === 1) { // 1 = OPEN
+				client.send(payload);
+			}
+		}
+	}
+
 	room.delete(ws);
 	const closedWorkspaceId = ws.workspaceId;
 	ws.workspaceId = undefined;
