@@ -1,6 +1,10 @@
 import * as Phaser from "phaser";
 import { WebRTCManager } from "../managers/WebRTCManager";
 
+interface GameZone {
+  rect: Phaser.Geom.Rectangle;
+  type: string;
+}
 
 export class MainScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -14,6 +18,8 @@ export class MainScene extends Phaser.Scene {
   
   private rtcManager: WebRTCManager | null = null;
   private myUserId: string | null = null;
+  private currentZoneType: string | null = null;
+  private zones: GameZone[] = [];
   private wsMessageListener = this.handleWsMessage.bind(this);
   private initiateCallListener = (e: Event) => {
     const targetUserId = (e as CustomEvent).detail.userId;
@@ -27,7 +33,17 @@ export class MainScene extends Phaser.Scene {
     const targetUserId = (e as CustomEvent).detail.userId;
     this.rtcManager?.declineCall(targetUserId);
   };
-
+  private endCallListener = (e: Event) => {
+    const targetUserId = (e as CustomEvent).detail.userId;
+    if (!targetUserId) return;
+    this.rtcManager?.endCall(targetUserId);
+    window.dispatchEvent(new CustomEvent("call-status", { detail: { status: "Call Ended" } }));
+    window.dispatchEvent(new CustomEvent("call-ended", { detail: { userId: targetUserId } }));
+  };
+  private iceServersListener = (e: Event) => {
+    const event = e as CustomEvent<{ iceServers: RTCIceServer[] }>;
+    this.rtcManager?.setIceServers(event.detail.iceServers);
+  };
 
   constructor() {
     super("MainScene");
@@ -47,6 +63,8 @@ export class MainScene extends Phaser.Scene {
     window.addEventListener("initiate-call", this.initiateCallListener);
     window.addEventListener("accept-call", this.acceptCallListener);
     window.addEventListener("decline-call", this.declineCallListener);
+    window.addEventListener("end-call", this.endCallListener);
+    window.addEventListener("webrtc-ice-servers", this.iceServersListener);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupEventListeners, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.cleanupEventListeners, this);
@@ -110,6 +128,12 @@ export class MainScene extends Phaser.Scene {
     } else if (data.type === "CALL_DECLINED") {
       console.log(`Call declined by ${data.payload.userId}`);
       window.dispatchEvent(new CustomEvent("call-status", { detail: { status: "Call Declined" } }));
+      window.dispatchEvent(new CustomEvent("call-ended", { detail: { userId: data.payload.userId } }));
+    } else if (data.type === "CALL_ENDED") {
+      const userId = data.payload.userId;
+      this.rtcManager?.endCall(userId, { notifyPeer: false });
+      window.dispatchEvent(new CustomEvent("call-status", { detail: { status: "Call Ended by Peer" } }));
+      window.dispatchEvent(new CustomEvent("call-ended", { detail: { userId } }));
     } else if (data.type === "PLAYER_MOVED") {
 
 
@@ -127,6 +151,7 @@ export class MainScene extends Phaser.Scene {
         this.otherPlayers.delete(userId);
       }
       this.rtcManager?.removePlayer(userId);
+      window.dispatchEvent(new CustomEvent("call-ended", { detail: { userId } }));
     }
 
   }
@@ -136,6 +161,8 @@ export class MainScene extends Phaser.Scene {
     window.removeEventListener("initiate-call", this.initiateCallListener);
     window.removeEventListener("accept-call", this.acceptCallListener);
     window.removeEventListener("decline-call", this.declineCallListener);
+    window.removeEventListener("end-call", this.endCallListener);
+    window.removeEventListener("webrtc-ice-servers", this.iceServersListener);
   }
 
   private addOtherPlayer(p: any) {
@@ -221,6 +248,34 @@ export class MainScene extends Phaser.Scene {
     walls.add(this.add.tileSprite(officeX + officeSize / 2, officeY + officeSize, officeSize + 16, 16, "wall"));
     walls.add(this.add.tileSprite(officeX, officeY + officeSize / 2, 16, officeSize, "wall"));
     walls.add(this.add.tileSprite(officeX + officeSize, officeY + officeSize / 2, 16, officeSize, "wall"));
+
+    // ZONES
+    const zoneWidth = officeSize / 2;
+    const zoneHeight = officeSize / 2;
+
+    const workingRect = new Phaser.Geom.Rectangle(officeX, officeY, zoneWidth, zoneHeight);
+    const meetingRect = new Phaser.Geom.Rectangle(officeX + zoneWidth, officeY, zoneWidth, zoneHeight);
+    const restingRect = new Phaser.Geom.Rectangle(officeX, officeY + zoneHeight, zoneWidth, zoneHeight);
+    const knowledgeRect = new Phaser.Geom.Rectangle(officeX + zoneWidth, officeY + zoneHeight, zoneWidth, zoneHeight);
+
+    this.zones = [
+      { rect: workingRect, type: "working" },
+      { rect: meetingRect, type: "meeting" },
+      { rect: restingRect, type: "resting" },
+      { rect: knowledgeRect, type: "knowledge" },
+    ];
+
+    // Colors: light blue, light red, light green, light yellow
+    const graphicsZone = this.add.graphics();
+    graphicsZone.fillStyle(0xadd8e6, 0.3);
+    graphicsZone.fillRectShape(workingRect);
+    graphicsZone.fillStyle(0xffb6c1, 0.3);
+    graphicsZone.fillRectShape(meetingRect);
+    graphicsZone.fillStyle(0x90ee90, 0.3);
+    graphicsZone.fillRectShape(restingRect);
+    graphicsZone.fillStyle(0xffffe0, 0.3);
+    graphicsZone.fillRectShape(knowledgeRect);
+
 
     // 4. Nature
     const nature = this.physics.add.staticGroup();
@@ -313,6 +368,31 @@ export class MainScene extends Phaser.Scene {
       this.lastX = this.player.x;
       this.lastY = this.player.y;
       this.lastAnim = currentAnim;
+    }
+
+    // Check Zones Overlap
+    let insideZone = false;
+    let foundZoneType: string | null = null;
+    const playerRect = new Phaser.Geom.Rectangle(this.player.x - 16, this.player.y - 24, 32, 48);
+
+    for (const zone of this.zones) {
+      if (Phaser.Geom.Rectangle.Overlaps(playerRect, zone.rect)) {
+        insideZone = true;
+        foundZoneType = zone.type;
+        break;
+      }
+    }
+
+    if (insideZone) {
+      if (this.currentZoneType !== foundZoneType) {
+        this.currentZoneType = foundZoneType;
+        window.dispatchEvent(new CustomEvent("zone-entered", { detail: { type: foundZoneType } }));
+      }
+    } else {
+      if (this.currentZoneType !== null) {
+        this.currentZoneType = null;
+        window.dispatchEvent(new CustomEvent("zone-entered", { detail: { type: null } }));
+      }
     }
   }
 }

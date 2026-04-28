@@ -35,6 +35,8 @@ export function WorkspaceRoom({
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [incomingCallUserId, setIncomingCallUserId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState<string | null>(null);
+  const [activeCallUserId, setActiveCallUserId] = useState<string | null>(null);
+  const [zoneMessage, setZoneMessage] = useState<string | null>(null);
 
 
 
@@ -161,18 +163,92 @@ export function WorkspaceRoom({
   }, [workspace.id, getToken]);
 
   useEffect(() => {
-    const handlePlayerSelected = (e: any) => setSelectedPlayerId(e.detail.userId);
-    const handleIncomingCall = (e: any) => setIncomingCallUserId(e.detail.userId);
-    const handleCallStatus = (e: any) => setCallStatus(e.detail.status);
+    let cancelled = false;
+  
+    const loadTurn = async () => {
+      const token = await getToken();
+      const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000/api/v1";
+      try {
+        const response = await fetch(`${API_BASE}/turn/credentials`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          credentials: "include",
+        });
+        if (!response.ok) return;
+  
+        const { iceServers } = await response.json();
+        if (!cancelled && iceServers) {
+          console.log("Loaded TURN ICE servers from backend");
+          window.dispatchEvent(
+            new CustomEvent("webrtc-ice-servers", { detail: { iceServers } }),
+          );
+        }
+      } catch(err) {
+        console.error("Failed to load TURN servers", err);
+      }
+    };
+  
+    void loadTurn();
+  
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken]);
+
+  useEffect(() => {
+    const handlePlayerSelected = (e: Event) => {
+      const event = e as CustomEvent<{ userId: string }>;
+      setSelectedPlayerId(event.detail.userId);
+    };
+    const handleIncomingCall = (e: Event) => {
+      const event = e as CustomEvent<{ userId: string }>;
+      setIncomingCallUserId(event.detail.userId);
+    };
+    const handleCallStatus = (e: Event) => {
+      const event = e as CustomEvent<{ status: string }>;
+      const status = event.detail.status;
+      setCallStatus(status);
+      if (
+        status === "Call Declined" ||
+        status === "Call Ended" ||
+        status === "Call Ended by Peer" ||
+        status === "Connection Failed" ||
+        status === "Network Blocked (ICE Failed)"
+      ) {
+        setActiveCallUserId(null);
+      }
+    };
+    const handleCallEnded = (e: Event) => {
+      const event = e as CustomEvent<{ userId?: string }>;
+      const endedUserId = event.detail?.userId;
+      setActiveCallUserId((current) => (endedUserId && current !== endedUserId ? current : null));
+    };
+
+    const handleZoneEntered = (e: Event) => {
+      const event = e as CustomEvent<{ type: string | null }>;
+      const zoneType = event.detail.type;
+      
+      if (zoneType) {
+        setZoneMessage(`Entering ${zoneType} zone`);
+        // We could clear it after 3 seconds, or keep it while they are in the zone.
+        // Let's keep it visible while they are in the zone, or let it fade out.
+        // For now, let's let it stick as long as they are in it, and clear when leaving.
+      } else {
+        setZoneMessage(null);
+      }
+    }
 
     window.addEventListener("player-selected", handlePlayerSelected);
     window.addEventListener("incoming-call", handleIncomingCall);
     window.addEventListener("call-status", handleCallStatus);
+    window.addEventListener("call-ended", handleCallEnded);
+    window.addEventListener("zone-entered", handleZoneEntered);
     
     return () => {
       window.removeEventListener("player-selected", handlePlayerSelected);
       window.removeEventListener("incoming-call", handleIncomingCall);
       window.removeEventListener("call-status", handleCallStatus);
+      window.removeEventListener("call-ended", handleCallEnded);
+      window.removeEventListener("zone-entered", handleZoneEntered);
     };
 
   }, []);
@@ -180,6 +256,7 @@ export function WorkspaceRoom({
   const initiateCall = () => {
     if (selectedPlayerId) {
       setCallStatus("Dialing...");
+      setActiveCallUserId(selectedPlayerId);
       window.dispatchEvent(new CustomEvent("initiate-call", { detail: { userId: selectedPlayerId } }));
       setSelectedPlayerId(null);
     }
@@ -188,6 +265,7 @@ export function WorkspaceRoom({
   const acceptCall = () => {
     if (incomingCallUserId) {
       setCallStatus("Connecting...");
+      setActiveCallUserId(incomingCallUserId);
       window.dispatchEvent(new CustomEvent("accept-call", { detail: { userId: incomingCallUserId } }));
       setIncomingCallUserId(null);
     }
@@ -199,6 +277,13 @@ export function WorkspaceRoom({
       window.dispatchEvent(new CustomEvent("decline-call", { detail: { userId: incomingCallUserId } }));
       setIncomingCallUserId(null);
     }
+  };
+
+  const endCall = () => {
+    if (!activeCallUserId) return;
+    window.dispatchEvent(new CustomEvent("end-call", { detail: { userId: activeCallUserId } }));
+    setCallStatus("Call Ended");
+    setActiveCallUserId(null);
   };
 
 
@@ -376,6 +461,35 @@ export function WorkspaceRoom({
           </div>
         )}
 
+        {activeCallUserId && (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "52px",
+              transform: "translateX(-50%)",
+              zIndex: 101,
+              pointerEvents: "auto",
+            }}
+          >
+            <button
+              onClick={endCall}
+              style={{
+                padding: "8px 14px",
+                background: "#ef4444",
+                color: "white",
+                border: "none",
+                borderRadius: "999px",
+                cursor: "pointer",
+                fontWeight: 700,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              }}
+            >
+              End Call
+            </button>
+          </div>
+        )}
+
         {/* Incoming Call Dialog - Appears on Top Center */}
 
         {incomingCallUserId && (
@@ -435,6 +549,26 @@ export function WorkspaceRoom({
                 Decline
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Zone Message - Bottom center */}
+        {zoneMessage && (
+          <div style={{
+            position: "absolute",
+            bottom: "30px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(0, 0, 0, 0.7)",
+            color: "white",
+            padding: "10px 20px",
+            borderRadius: "20px",
+            fontWeight: "bold",
+            pointerEvents: "none",
+            animation: "fadeIn 0.3s ease-in-out",
+            zIndex: 100
+          }}>
+            {zoneMessage}
           </div>
         )}
 

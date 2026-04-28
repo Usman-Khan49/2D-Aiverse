@@ -15,6 +15,7 @@ export class WebRTCManager {
   private socket: WebSocket | null = null;
   private myUserId: string | null = null;
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
+  private iceServers: RTCIceServer[] | null = null;
 
   constructor(socket: WebSocket | null, myUserId: string | null) {
 
@@ -30,6 +31,11 @@ export class WebRTCManager {
     this.myUserId = userId;
   }
 
+  setIceServers(iceServers: RTCIceServer[]) {
+    this.iceServers = iceServers;
+    console.log("WebRTC: ICE Servers updated from backend.");
+  }
+
   async initLocalStream() {
     if (this.streamPromise) return this.streamPromise;
 
@@ -37,9 +43,9 @@ export class WebRTCManager {
       try {
         const micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
+            echoCancellation: false, // Turn off to prevent choppy/clipping audio
+            noiseSuppression: false, // Turn off to prevent the browser from muting parts of your voice
+            autoGainControl: false,  // Turn off so volume doesn't wildly fluctuate
           },
           video: false,
         });
@@ -212,18 +218,29 @@ export class WebRTCManager {
     if (el) el.remove();
   }
 
+  endCall(userId: string, options?: { notifyPeer?: boolean }) {
+    const notifyPeer = options?.notifyPeer ?? true;
+    this.removePlayer(userId);
+    this.pendingCandidates.delete(userId);
+    if (notifyPeer) {
+      this.sendWsMessage("CALL_ENDED", { targetUserId: userId });
+    }
+  }
+
   // ── Internal ──
 
   private createPeerConnection(targetUserId: string): RTCPeerConnection {
     console.log(`WebRTC: Creating RTCPeerConnection for ${targetUserId}`);
 
+    const defaultIceServers = [{
+      urls: [
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+      ],
+    }];
+
     const pc = new RTCPeerConnection({
-      iceServers: [{
-        urls: [
-          "stun:stun.l.google.com:19302",
-          "stun:stun1.l.google.com:19302",
-        ],
-      }],
+      iceServers: this.iceServers ?? defaultIceServers,
     });
 
 

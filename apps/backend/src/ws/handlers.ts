@@ -55,7 +55,12 @@ export async function handleMessage(ws: WorkspaceSocket, raw: unknown, routeWork
 		sendCurrentPlayers(ws, routeWorkspaceId);
 		return;
 	}
-	if (data.type === "CALL_REQUEST" || data.type === "CALL_ACCEPTED" || data.type === "CALL_DECLINED") {
+	if (
+		data.type === "CALL_REQUEST" ||
+		data.type === "CALL_ACCEPTED" ||
+		data.type === "CALL_DECLINED" ||
+		data.type === "CALL_ENDED"
+	) {
 		handleCallNegotiation(ws, data, routeWorkspaceId);
 		return;
 	}
