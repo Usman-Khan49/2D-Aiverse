@@ -37,6 +37,15 @@ export function WorkspaceRoom({
   const [callStatus, setCallStatus] = useState<string | null>(null);
   const [activeCallUserId, setActiveCallUserId] = useState<string | null>(null);
   const [zoneMessage, setZoneMessage] = useState<string | null>(null);
+  const [zonePlayerCount, setZonePlayerCount] = useState<number>(0);
+  
+  // Group Call State
+  const [isMeetingZone, setIsMeetingZone] = useState(false);
+  const [groupCallActive, setGroupCallActive] = useState(false);
+  const [groupCallParticipants, setGroupCallParticipants] = useState<string[]>([]);
+  const [amInGroupCall, setAmInGroupCall] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
 
 
 
@@ -227,15 +236,72 @@ export function WorkspaceRoom({
       const event = e as CustomEvent<{ type: string | null }>;
       const zoneType = event.detail.type;
       
+      setIsMeetingZone(zoneType === "meeting");
+
       if (zoneType) {
-        setZoneMessage(`Entering ${zoneType} zone`);
-        // We could clear it after 3 seconds, or keep it while they are in the zone.
-        // Let's keep it visible while they are in the zone, or let it fade out.
-        // For now, let's let it stick as long as they are in it, and clear when leaving.
+        setZoneMessage(`Zone: ${zoneType.charAt(0).toUpperCase() + zoneType.slice(1)}`);
       } else {
         setZoneMessage(null);
+        setZonePlayerCount(0);
       }
-    }
+    };
+
+    const handleGroupCallState = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setGroupCallActive(data.active);
+      if (data.active) {
+        setGroupCallParticipants(data.participants || []);
+        setZonePlayerCount((data.participants || []).length);
+      } else {
+        setGroupCallParticipants([]);
+        setAmInGroupCall(false);
+        setZonePlayerCount(0);
+      }
+    };
+
+    const handleGroupCallStarted = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setGroupCallActive(true);
+      setGroupCallParticipants(data.participants || []);
+      setZonePlayerCount((data.participants || []).length);
+      
+      // Show notification to the room
+      setNotification(`A group call has started in the Meeting zone!`);
+      setTimeout(() => setNotification(null), 4000);
+    };
+
+    const handleGroupCallUserJoined = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setGroupCallParticipants(prev => {
+        const next = [...prev.filter(p => p !== data.userId), data.userId];
+        setZonePlayerCount(next.length);
+        return next;
+      });
+    };
+
+    const handleGroupCallUserLeft = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setGroupCallParticipants(prev => {
+        const next = prev.filter(p => p !== data.userId);
+        setZonePlayerCount(next.length);
+        return next;
+      });
+    };
+
+    const handleGroupCallEnded = () => {
+      setGroupCallActive(false);
+      setGroupCallParticipants([]);
+      setAmInGroupCall(false);
+      setZonePlayerCount(0);
+      setNotification(`The group call has ended.`);
+      setTimeout(() => setNotification(null), 4000);
+    };
+
+    const handleGroupCallParticipants = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setGroupCallParticipants(data.players || []);
+      setZonePlayerCount((data.players || []).length);
+    };
 
     window.addEventListener("player-selected", handlePlayerSelected);
     window.addEventListener("incoming-call", handleIncomingCall);
@@ -243,12 +309,27 @@ export function WorkspaceRoom({
     window.addEventListener("call-ended", handleCallEnded);
     window.addEventListener("zone-entered", handleZoneEntered);
     
+    // Group Call events
+    window.addEventListener("group-call-state", handleGroupCallState);
+    window.addEventListener("group-call-started", handleGroupCallStarted);
+    window.addEventListener("group-call-user-joined", handleGroupCallUserJoined);
+    window.addEventListener("group-call-user-left", handleGroupCallUserLeft);
+    window.addEventListener("group-call-ended", handleGroupCallEnded);
+    window.addEventListener("group-call-participants", handleGroupCallParticipants);
+    
     return () => {
       window.removeEventListener("player-selected", handlePlayerSelected);
       window.removeEventListener("incoming-call", handleIncomingCall);
       window.removeEventListener("call-status", handleCallStatus);
       window.removeEventListener("call-ended", handleCallEnded);
       window.removeEventListener("zone-entered", handleZoneEntered);
+      
+      window.removeEventListener("group-call-state", handleGroupCallState);
+      window.removeEventListener("group-call-started", handleGroupCallStarted);
+      window.removeEventListener("group-call-user-joined", handleGroupCallUserJoined);
+      window.removeEventListener("group-call-user-left", handleGroupCallUserLeft);
+      window.removeEventListener("group-call-ended", handleGroupCallEnded);
+      window.removeEventListener("group-call-participants", handleGroupCallParticipants);
     };
 
   }, []);
@@ -286,7 +367,27 @@ export function WorkspaceRoom({
     setActiveCallUserId(null);
   };
 
+  const startGroupCall = () => {
+    setAmInGroupCall(true);
+    setGroupCallActive(true);
+    window.dispatchEvent(new CustomEvent("start-group-call"));
+  };
 
+  const joinGroupCall = () => {
+    setAmInGroupCall(true);
+    window.dispatchEvent(new CustomEvent("join-group-call"));
+  };
+
+  const leaveGroupCall = () => {
+    setAmInGroupCall(false);
+    window.dispatchEvent(new CustomEvent("leave-group-call"));
+  };
+
+  const toggleMute = () => {
+    const newState = !isMuted;
+    setIsMuted(newState);
+    window.dispatchEvent(new CustomEvent("toggle-mute", { detail: { muted: newState } }));
+  };
 
   return (
     <div className="workspace-container" style={{ 
@@ -490,6 +591,171 @@ export function WorkspaceRoom({
           </div>
         )}
 
+        {/* Notification Toast */}
+        {notification && (
+          <div style={{
+            position: "absolute",
+            top: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#3b82f6",
+            color: "white",
+            padding: "10px 20px",
+            borderRadius: "20px",
+            fontWeight: "bold",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+            zIndex: 100,
+            animation: "slideDown 0.3s ease-out"
+          }}>
+            {notification}
+          </div>
+        )}
+
+        {/* Group Call Controls */}
+        <div style={{
+          position: "absolute",
+          top: "100px",
+          left: "20px",
+          pointerEvents: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px"
+        }}>
+          <button
+            onClick={startGroupCall}
+            disabled={!isMeetingZone || groupCallActive || amInGroupCall}
+            style={{
+              padding: "10px 20px",
+              background: (!isMeetingZone || groupCallActive || amInGroupCall) ? "#d1d5db" : "#10b981",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: (!isMeetingZone || groupCallActive || amInGroupCall) ? "not-allowed" : "pointer",
+              fontWeight: "600",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              transition: "calc(0.2s)"
+            }}
+          >
+            Start Group Call
+          </button>
+
+          <button
+            onClick={joinGroupCall}
+            disabled={!isMeetingZone || !groupCallActive || amInGroupCall}
+            style={{
+              padding: "10px 20px",
+              background: (!isMeetingZone || !groupCallActive || amInGroupCall) ? "#d1d5db" : "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: (!isMeetingZone || !groupCallActive || amInGroupCall) ? "not-allowed" : "pointer",
+              fontWeight: "600",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              transition: "calc(0.2s)"
+            }}
+          >
+            Join Group Call
+          </button>
+        </div>
+
+        {/* Group Call Overlay (Zoom-like Screen) */}
+        {amInGroupCall && (
+          <div style={{
+            position: "absolute",
+            bottom: "20px",
+            right: "20px",
+            width: "350px",
+            background: "rgba(31, 41, 55, 0.95)",
+            backdropFilter: "blur(10px)",
+            borderRadius: "16px",
+            padding: "20px",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+            pointerEvents: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "15px",
+            animation: "slideIn 0.3s ease-out"
+          }}>
+            <h3 style={{ margin: 0, color: "white", textAlign: "center" }}>Group Call ({groupCallParticipants.length})</h3>
+            
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: "10px",
+              maxHeight: "300px",
+              overflowY: "auto"
+            }}>
+              {/* Render local user */}
+              <div style={{
+                background: "#374151",
+                borderRadius: "12px",
+                aspectRatio: "1",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+                border: "2px solid #10b981"
+              }}>
+                <span style={{ color: "white", fontSize: "2em", fontWeight: "bold" }}>YOU</span>
+                {isMuted && (
+                  <span style={{ position: "absolute", bottom: "5px", right: "5px", fontSize: "1.2em" }}>🔇</span>
+                )}
+              </div>
+
+              {/* Render remote participants */}
+              {groupCallParticipants.filter(id => id !== "pending").map((userId, i) => (
+                <div key={i} style={{
+                  background: "#4b5563",
+                  borderRadius: "12px",
+                  aspectRatio: "1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative"
+                }}>
+                  <span style={{ color: "white", fontSize: "2em", fontWeight: "bold" }}>
+                    {userId.substring(0, 2).toUpperCase()}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "10px" }}>
+              <button
+                onClick={toggleMute}
+                style={{
+                  padding: "10px 20px",
+                  background: isMuted ? "#ef4444" : "#4b5563",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  flex: 1
+                }}
+              >
+                {isMuted ? "Unmute" : "Mute"}
+              </button>
+              
+              <button
+                onClick={leaveGroupCall}
+                style={{
+                  padding: "10px 20px",
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  flex: 1
+                }}
+              >
+                Hang up
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Incoming Call Dialog - Appears on Top Center */}
 
         {incomingCallUserId && (
@@ -566,9 +832,22 @@ export function WorkspaceRoom({
             fontWeight: "bold",
             pointerEvents: "none",
             animation: "fadeIn 0.3s ease-in-out",
-            zIndex: 100
+            zIndex: 100,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center"
           }}>
-            {zoneMessage}
+            <div style={{ fontSize: "1.1em" }}>{zoneMessage}</div>
+            <div style={{ fontSize: "0.8em", marginTop: "4px", color: "#10b981", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ 
+                width: "8px", 
+                height: "8px", 
+                background: "#10b981", 
+                borderRadius: "50%",
+                display: "inline-block"
+              }}></span>
+              {zonePlayerCount} {zonePlayerCount === 1 ? "person" : "people"} in call
+            </div>
           </div>
         )}
 

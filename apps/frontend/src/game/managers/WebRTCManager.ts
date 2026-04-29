@@ -167,6 +167,75 @@ export class WebRTCManager {
 
   // ── Call Flow ──
 
+  async startGroupCall() {
+    console.log(`WebRTC: Starting group call`);
+    try {
+      await this.initLocalStream();
+    } catch (e) {
+      console.warn("WebRTC: Failed to get local stream before starting call", e);
+    }
+    this.sendWsMessage("START_GROUP_CALL", {});
+  }
+
+  async joinGroupCall() {
+    console.log(`WebRTC: Joining group call`);
+    try {
+      await this.initLocalStream();
+    } catch (e) {
+      console.warn("WebRTC: Failed to get local stream before joining call", e);
+    }
+    this.sendWsMessage("JOIN_GROUP_CALL", {});
+  }
+
+  leaveGroupCall() {
+    console.log(`WebRTC: Leaving group call`);
+    for (const userId of this.peers.keys()) {
+      this.removePlayer(userId);
+    }
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+      this.streamPromise = null;
+    }
+    this.sendWsMessage("LEAVE_GROUP_CALL", {});
+  }
+
+  toggleMute(mute: boolean) {
+    if (this.localStream) {
+      this.localStream.getAudioTracks().forEach(track => {
+        track.enabled = !mute;
+      });
+    }
+  }
+
+  async joinAudioZone(zoneId: string) {
+    console.log(`WebRTC: Joining audio zone ${zoneId}`);
+    try {
+      await this.initLocalStream();
+    } catch (e) {
+      console.warn("WebRTC: Failed to get local stream before joining zone", e);
+    }
+    this.sendWsMessage("JOIN_AUDIO_ZONE", { zoneId });
+  }
+
+  leaveAudioZone() {
+    console.log(`WebRTC: Leaving audio zone`);
+    
+    // Disconnect from all peers we are currently connected to in the zone
+    for (const userId of this.peers.keys()) {
+      this.removePlayer(userId);
+    }
+    
+    // Stop local mic stream to be totally clean
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+      this.streamPromise = null;
+    }
+    
+    this.sendWsMessage("LEAVE_AUDIO_ZONE", {});
+  }
+
   sendCallRequest(targetUserId: string) {
     if (this.peers.has(targetUserId) || targetUserId === this.myUserId) return;
     console.log(`WebRTC: Sending call request to ${targetUserId}`);

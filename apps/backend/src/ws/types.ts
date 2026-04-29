@@ -9,6 +9,8 @@ export type WorkspaceSocket = WebSocket & {
 	x?: number;
 	y?: number;
 	anim?: string;
+	audioZone?: string;
+	inGroupCall?: boolean;
 };
 
 export type WsMessage = {

@@ -2,7 +2,7 @@ import { WebSocket } from "ws";
 import { verifyToken } from "@clerk/express";
 import { WorkspaceSocket, WsMessage } from "./types.js";
 import { sendJson, validateWorkspaceMembership } from "./utils.js";
-import { joinWorkspace, getRoom } from "./room-manager.js";
+import { joinWorkspace, getRoom, groupCalls, leaveGroupCall, broadcastToRoom } from "./room-manager.js";
 
 export async function handleMessage(ws: WorkspaceSocket, raw: unknown, routeWorkspaceId: string) {
 	let data: WsMessage;
@@ -53,6 +53,26 @@ export async function handleMessage(ws: WorkspaceSocket, raw: unknown, routeWork
 	}
 	if (data.type === "GET_CURRENT_PLAYERS") {
 		sendCurrentPlayers(ws, routeWorkspaceId);
+		return;
+	}
+	if (data.type === "JOIN_AUDIO_ZONE") {
+		handleJoinAudioZone(ws, data, routeWorkspaceId);
+		return;
+	}
+	if (data.type === "LEAVE_AUDIO_ZONE") {
+		handleLeaveAudioZone(ws, routeWorkspaceId);
+		return;
+	}
+	if (data.type === "START_GROUP_CALL") {
+		handleStartGroupCall(ws, routeWorkspaceId);
+		return;
+	}
+	if (data.type === "JOIN_GROUP_CALL") {
+		handleJoinGroupCall(ws, routeWorkspaceId);
+		return;
+	}
+	if (data.type === "LEAVE_GROUP_CALL") {
+		leaveGroupCall(ws);
 		return;
 	}
 	if (
@@ -169,6 +189,7 @@ async function handleAuth(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId
 		const room = getRoom(routeWorkspaceId);
 		if (room) {
 			sendCurrentPlayers(ws, routeWorkspaceId);
+			sendGroupCallState(ws, routeWorkspaceId);
 
 			// Broadcast to others that this player joined
 
@@ -260,6 +281,75 @@ function handleChatMessage(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceI
 }
 
 
+function sendGroupCallState(ws: WorkspaceSocket, routeWorkspaceId: string) {
+	const call = groupCalls.get(routeWorkspaceId);
+	if (call) {
+		sendJson(ws, {
+			type: "GROUP_CALL_STATE",
+			payload: {
+				active: true,
+				starterId: call.starterId,
+				participants: Array.from(call.participants)
+			}
+		});
+	} else {
+		sendJson(ws, {
+			type: "GROUP_CALL_STATE",
+			payload: {
+				active: false
+			}
+		});
+	}
+}
+
+function handleStartGroupCall(ws: WorkspaceSocket, routeWorkspaceId: string) {
+	if (!ws.userId) return;
+	
+	if (groupCalls.has(routeWorkspaceId)) {
+		sendJson(ws, { type: "ERROR", payload: { message: "Group call already active" } });
+		return;
+	}
+
+	ws.inGroupCall = true;
+	const participants = new Set<string>();
+	participants.add(ws.userId);
+	
+	groupCalls.set(routeWorkspaceId, {
+		starterId: ws.userId,
+		participants
+	});
+
+	broadcastToRoom(routeWorkspaceId, "GROUP_CALL_STARTED", {
+		starterId: ws.userId,
+		participants: Array.from(participants)
+	});
+}
+
+function handleJoinGroupCall(ws: WorkspaceSocket, routeWorkspaceId: string) {
+	if (!ws.userId) return;
+	const call = groupCalls.get(routeWorkspaceId);
+	if (!call) {
+		sendJson(ws, { type: "ERROR", payload: { message: "No active group call" } });
+		return;
+	}
+
+	ws.inGroupCall = true;
+	
+	// Notify EXISTING participants to expect a WebRTC offer from us
+	// We wait until they get USER_JOINED_GROUP_CALL
+	broadcastToRoom(routeWorkspaceId, "USER_JOINED_GROUP_CALL", { userId: ws.userId });
+	
+	call.participants.add(ws.userId);
+
+	// Let the joiner know they are in and who to call
+	sendJson(ws, {
+		type: "GROUP_CALL_JOINED_SUCCESS",
+		payload: {
+			participants: Array.from(call.participants)
+		}
+	});
+}
+
 function handleJoinWorkspace(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId: string) {
 	const nextWorkspaceId = data.payload?.workspaceId?.trim();
 	if (!nextWorkspaceId) {
@@ -286,6 +376,58 @@ function handleJoinWorkspace(ws: WorkspaceSocket, data: WsMessage, routeWorkspac
 
 	joinWorkspace(ws, nextWorkspaceId);
 	sendJson(ws, { type: "JOINED", payload: { workspaceId: nextWorkspaceId } });
+}
+
+function handleJoinAudioZone(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId: string) {
+	const zoneId = (data.payload as any)?.zoneId;
+	if (!zoneId) return;
+
+	ws.audioZone = zoneId;
+	const room = getRoom(routeWorkspaceId);
+	if (!room) return;
+
+	const playersInZone: string[] = [];
+	for (const client of room) {
+		if (client !== ws && client.audioZone === zoneId && client.userId) {
+			playersInZone.push(client.userId);
+			sendJson(client, {
+				type: "USER_JOINED_AUDIO_ZONE",
+				payload: {
+					userId: ws.userId,
+					zoneId
+				}
+			});
+		}
+	}
+
+	sendJson(ws, {
+		type: "AUDIO_ZONE_PLAYERS",
+		payload: {
+			zoneId,
+			players: playersInZone
+		}
+	});
+}
+
+function handleLeaveAudioZone(ws: WorkspaceSocket, routeWorkspaceId: string) {
+	const oldZone = ws.audioZone;
+	if (!oldZone) return;
+
+	ws.audioZone = undefined;
+	const room = getRoom(routeWorkspaceId);
+	if (!room) return;
+
+	for (const client of room) {
+		if (client !== ws && client.audioZone === oldZone && client.userId) {
+			sendJson(client, {
+				type: "USER_LEFT_AUDIO_ZONE",
+				payload: {
+					userId: ws.userId,
+					zoneId: oldZone
+				}
+			});
+		}
+	}
 }
 
 function handleWebRtcSignal(ws: WorkspaceSocket, data: WsMessage, routeWorkspaceId: string) {

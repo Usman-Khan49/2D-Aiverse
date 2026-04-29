@@ -44,6 +44,19 @@ export class MainScene extends Phaser.Scene {
     const event = e as CustomEvent<{ iceServers: RTCIceServer[] }>;
     this.rtcManager?.setIceServers(event.detail.iceServers);
   };
+  private startGroupCallListener = () => {
+    this.rtcManager?.startGroupCall();
+  };
+  private joinGroupCallListener = () => {
+    this.rtcManager?.joinGroupCall();
+  };
+  private leaveGroupCallListener = () => {
+    this.rtcManager?.leaveGroupCall();
+  };
+  private toggleMuteListener = (e: Event) => {
+    const muted = (e as CustomEvent).detail.muted;
+    this.rtcManager?.toggleMute(muted);
+  };
 
   constructor() {
     super("MainScene");
@@ -65,6 +78,10 @@ export class MainScene extends Phaser.Scene {
     window.addEventListener("decline-call", this.declineCallListener);
     window.addEventListener("end-call", this.endCallListener);
     window.addEventListener("webrtc-ice-servers", this.iceServersListener);
+    window.addEventListener("start-group-call", this.startGroupCallListener);
+    window.addEventListener("join-group-call", this.joinGroupCallListener);
+    window.addEventListener("leave-group-call", this.leaveGroupCallListener);
+    window.addEventListener("toggle-mute", this.toggleMuteListener);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupEventListeners, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.cleanupEventListeners, this);
@@ -134,6 +151,29 @@ export class MainScene extends Phaser.Scene {
       this.rtcManager?.endCall(userId, { notifyPeer: false });
       window.dispatchEvent(new CustomEvent("call-status", { detail: { status: "Call Ended by Peer" } }));
       window.dispatchEvent(new CustomEvent("call-ended", { detail: { userId } }));
+    } else if (data.type === "GROUP_CALL_STATE") {
+      window.dispatchEvent(new CustomEvent("group-call-state", { detail: data.payload }));
+    } else if (data.type === "GROUP_CALL_STARTED") {
+      window.dispatchEvent(new CustomEvent("group-call-started", { detail: data.payload }));
+    } else if (data.type === "GROUP_CALL_JOINED_SUCCESS") {
+      const players = data.payload.participants;
+      window.dispatchEvent(new CustomEvent("group-call-participants", { detail: { players } }));
+      players.forEach((userId: string) => {
+        if (userId !== this.myUserId) {
+          this.rtcManager?.startCallAsInitiator(userId);
+        }
+      });
+    } else if (data.type === "USER_JOINED_GROUP_CALL") {
+      const joinerId = data.payload.userId;
+      window.dispatchEvent(new CustomEvent("group-call-user-joined", { detail: { userId: joinerId } }));
+      // We are waiting for their offer, handled by handleSignal
+    } else if (data.type === "USER_LEFT_GROUP_CALL") {
+      const leftId = data.payload.userId;
+      this.rtcManager?.endCall(leftId, { notifyPeer: false });
+      window.dispatchEvent(new CustomEvent("group-call-user-left", { detail: { userId: leftId } }));
+    } else if (data.type === "GROUP_CALL_ENDED") {
+      this.rtcManager?.leaveGroupCall();
+      window.dispatchEvent(new CustomEvent("group-call-ended", { detail: data.payload }));
     } else if (data.type === "PLAYER_MOVED") {
 
 
@@ -163,6 +203,10 @@ export class MainScene extends Phaser.Scene {
     window.removeEventListener("decline-call", this.declineCallListener);
     window.removeEventListener("end-call", this.endCallListener);
     window.removeEventListener("webrtc-ice-servers", this.iceServersListener);
+    window.removeEventListener("start-group-call", this.startGroupCallListener);
+    window.removeEventListener("join-group-call", this.joinGroupCallListener);
+    window.removeEventListener("leave-group-call", this.leaveGroupCallListener);
+    window.removeEventListener("toggle-mute", this.toggleMuteListener);
   }
 
   private addOtherPlayer(p: any) {
