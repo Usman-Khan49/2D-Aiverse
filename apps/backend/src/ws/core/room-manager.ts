@@ -28,11 +28,9 @@ export const leaveGroupCall = (ws: WorkspaceSocket) => {
 	if (!call) return;
 
 	if (call.starterId === ws.userId) {
-		// Starter left, end the call
 		groupCalls.delete(workspaceId);
 		broadcastToRoom(workspaceId, "GROUP_CALL_ENDED", { reason: "starter_left" });
 		
-		// Unset inGroupCall on all players
 		const room = rooms.get(workspaceId);
 		if (room) {
 			for (const client of room) {
@@ -40,13 +38,11 @@ export const leaveGroupCall = (ws: WorkspaceSocket) => {
 			}
 		}
 	} else if (call.participants.has(ws.userId)) {
-		// Participant left
 		call.participants.delete(ws.userId);
 		ws.inGroupCall = false;
 		broadcastToRoom(workspaceId, "USER_LEFT_GROUP_CALL", { userId: ws.userId });
 		
 		if (call.participants.size === 0) {
-			// No one left, end call
 			groupCalls.delete(workspaceId);
 			broadcastToRoom(workspaceId, "GROUP_CALL_ENDED", { reason: "empty" });
 		}
@@ -54,9 +50,7 @@ export const leaveGroupCall = (ws: WorkspaceSocket) => {
 };
 
 export const leaveWorkspace = (ws: WorkspaceSocket) => {
-	if (!ws.workspaceId) {
-		return;
-	}
+	if (!ws.workspaceId) return;
 
 	leaveGroupCall(ws);
 
@@ -66,14 +60,13 @@ export const leaveWorkspace = (ws: WorkspaceSocket) => {
 		return;
 	}
 
-	// Broadcast PLAYER_LEFT to everyone else in the room
 	if (ws.userId) {
 		const payload = JSON.stringify({
 			type: "PLAYER_LEFT",
 			payload: { userId: ws.userId },
 		});
 		for (const client of room) {
-			if (client !== ws && client.readyState === 1) { // 1 = OPEN
+			if (client !== ws && client.readyState === 1) {
 				client.send(payload);
 			}
 		}

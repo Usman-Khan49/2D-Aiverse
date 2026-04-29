@@ -1,8 +1,8 @@
 import { type Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
-import { WorkspaceSocket } from "./types.js";
-import { sendJson, rejectUpgrade } from "./utils.js";
-import { leaveWorkspace } from "./room-manager.js";
+import { WorkspaceSocket } from "./core/types.js";
+import { sendJson, rejectUpgrade } from "./core/utils.js";
+import { leaveWorkspace } from "./core/room-manager.js";
 import { handleMessage } from "./handlers.js";
 
 const WORKSPACE_PATH_RE = /^\/ws\/workspaces\/([^/]+)$/;

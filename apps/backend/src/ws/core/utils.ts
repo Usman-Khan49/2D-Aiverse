@@ -1,6 +1,6 @@
 import { WebSocket } from "ws";
 import type { Duplex } from "node:stream";
-import { db } from "../db/client.js";
+import { db } from "../../db/client.js";
 
 export const sendJson = (ws: WebSocket, data: unknown) => {
 	if (ws.readyState === WebSocket.OPEN) {
