@@ -21,12 +21,22 @@ interface MeetingSummaryModalProps {
     isOpen: boolean;
     onClose: () => void;
     data: SummaryData | null;
+    highlightOffset?: number | null;
 }
 
-export const MeetingSummaryModal: React.FC<MeetingSummaryModalProps> = ({ isOpen, onClose, data }) => {
+export const MeetingSummaryModal: React.FC<MeetingSummaryModalProps> = ({ isOpen, onClose, data, highlightOffset }) => {
     if (!isOpen || !data) return null;
 
     const { summary, transcript } = data;
+
+    React.useEffect(() => {
+        if (isOpen && highlightOffset !== null && highlightOffset !== undefined) {
+            setTimeout(() => {
+                const el = document.getElementById('highlighted-segment');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 500);
+        }
+    }, [isOpen, highlightOffset]);
 
     return (
         <div style={{
@@ -156,14 +166,37 @@ export const MeetingSummaryModal: React.FC<MeetingSummaryModalProps> = ({ isOpen
                             maxHeight: '400px',
                             overflowY: 'auto'
                         }}>
-                            {transcript?.map?.((seg: any, i: number) => (
-                                <div key={i} style={{ borderLeft: '3px solid #6366f1', paddingLeft: '12px' }}>
-                                    <div style={{ fontWeight: 700, color: '#4338ca', fontSize: '0.8rem', textTransform: 'uppercase' }}>
-                                        {seg.speaker}
-                                    </div>
-                                    <div style={{ color: '#374151' }}>{seg.text}</div>
-                                </div>
-                            )) || <div>No transcript data.</div>}
+                            {(() => {
+                                let cumulativeWords = 0;
+                                return transcript?.map?.((seg: any, i: number) => {
+                                    const segmentWords = seg.text.split(' ').length;
+                                    const isHighlighted = highlightOffset !== null && highlightOffset !== undefined && 
+                                                        highlightOffset >= cumulativeWords && 
+                                                        highlightOffset < (cumulativeWords + segmentWords);
+                                    
+                                    cumulativeWords += segmentWords;
+
+                                    return (
+                                        <div 
+                                            key={i} 
+                                            id={isHighlighted ? 'highlighted-segment' : undefined}
+                                            style={{ 
+                                                borderLeft: isHighlighted ? '4px solid #f59e0b' : '3px solid #6366f1', 
+                                                paddingLeft: '12px',
+                                                backgroundColor: isHighlighted ? '#fff7ed' : 'transparent',
+                                                padding: isHighlighted ? '8px 12px' : '0 0 0 12px',
+                                                borderRadius: isHighlighted ? '8px' : '0',
+                                                transition: 'all 0.5s'
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 700, color: isHighlighted ? '#d97706' : '#4338ca', fontSize: '0.8rem', textTransform: 'uppercase' }}>
+                                                {seg.speaker} {isHighlighted && "✨ RELEVANT PASSAGE"}
+                                            </div>
+                                            <div style={{ color: '#374151' }}>{seg.text}</div>
+                                        </div>
+                                    );
+                                });
+                            })() || <div>No transcript data.</div>}
                         </div>
                     </div>
                 </div>

@@ -86,3 +86,20 @@ class GeminiService:
         except Exception as e:
             print(f"[!] Error in final synthesis job: {e}")
             return {"error": "Failed to synthesize summaries"}
+
+    def get_embedding(self, text):
+        """
+        Generates a 768-dimension vector embedding for the given text.
+        """
+        try:
+            result = genai.embed_content(
+                model="models/gemini-embedding-001",
+                content=text,
+                task_type="retrieval_document",
+                title="Meeting Segment",
+                output_dimensionality=768
+            )
+            return result['embedding']
+        except Exception as e:
+            print(f"[!] Error generating embedding: {e}")
+            return None

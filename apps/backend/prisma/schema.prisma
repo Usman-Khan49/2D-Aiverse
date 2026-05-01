@@ -148,14 +148,19 @@ model ActionItem {
   owner   User?    @relation(fields: [ownerId], references: [id])
 }
 
-// ─── Embeddings ──────────────────────────────────────────
-
+// ─── Embeddings (RAG) ────────────────────────────────────
 model Embedding {
-  id         String   @id @default(uuid())
-  sourceId   String // sessionId or summaryId
-  sourceType String // 'transcript' | 'summary'
-  content    String
-  createdAt  DateTime @default(now())
+  id          String   @id @default(uuid())
+  workspaceId String
+  sessionId   String
+  sourceId    String // sessionId or summaryId
+  sourceType  String // 'transcript' | 'summary'
+  content     String   @db.Text
+  wordOffset  Int? // For highlighting in the transcript
+  vector      Unsupported("vector(768)")?
+  createdAt   DateTime @default(now())
 
+  @@index([workspaceId])
+  @@index([sessionId])
   @@index([sourceId])
 }

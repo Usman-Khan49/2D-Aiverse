@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { PhaserGame } from "../components/PhaserGame";
 import { MeetingSummaryModal } from "../components/MeetingSummaryModal";
 import { KnowledgeLibraryModal } from "../components/KnowledgeLibraryModal";
+import { MemoryQAPanel } from "../components/MemoryQAPanel";
 
 const WS_BASE = import.meta.env.VITE_WS_BASE_URL?.replace(/\/$/, "") ??
   "ws://localhost:4000";
@@ -52,6 +53,7 @@ export function WorkspaceRoom({
   // Summary State
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [summaryData, setSummaryData] = useState<any>(null);
+  const [highlightOffset, setHighlightOffset] = useState<number | null>(null);
   
   // Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -460,8 +462,12 @@ export function WorkspaceRoom({
 
       <MeetingSummaryModal 
         isOpen={isSummaryModalOpen} 
-        onClose={() => setIsSummaryModalOpen(false)} 
+        onClose={() => {
+          setIsSummaryModalOpen(false);
+          setHighlightOffset(null);
+        }} 
         data={summaryData} 
+        highlightOffset={highlightOffset}
       />
 
       <KnowledgeLibraryModal 
@@ -471,6 +477,15 @@ export function WorkspaceRoom({
         getToken={getToken}
         onSelectSummary={(sessionId) => {
           setIsLibraryOpen(false);
+          fetchSummary(sessionId);
+        }}
+      />
+
+      <MemoryQAPanel 
+        workspaceId={workspace.id}
+        getToken={getToken}
+        onViewSource={(sessionId, offset) => {
+          setHighlightOffset(offset);
           fetchSummary(sessionId);
         }}
       />

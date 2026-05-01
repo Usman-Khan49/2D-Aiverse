@@ -6,6 +6,7 @@ import psycopg2
 from dotenv import load_dotenv
 from src.jobs.transcribe import run_transcription_job
 from src.jobs.summarize import run_chunk_summarization_job, run_final_synthesis_job
+from src.jobs.embed import run_indexing_job
 from src.services.notify import NotifyService
 
 load_dotenv()
@@ -151,7 +152,16 @@ def handle_process_meeting(data):
         print(f"[*] Step 3/3: Storing results in Postgres...")
         save_results_to_db(session_id, transcript, summary)
         
-        # 4. Local Backup
+        # 4. Index for RAG (pgvector)
+        workspace_id = data.get("workspaceId")
+        if workspace_id:
+            print(f"[*] Step 4/4: Indexing for RAG...")
+            run_indexing_job(workspace_id, session_id, transcript, summary)
+            print(f"[+] Indexing complete!")
+        else:
+            print("[!] Warning: No workspaceId provided, skipping RAG indexing.")
+
+        # 5. Local Backup
         result_path = file_path.replace(".webm", "_summary.json")
         with open(result_path, "w") as f:
             json.dump({
