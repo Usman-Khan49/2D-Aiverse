@@ -1,5 +1,6 @@
 import { WorkspaceSocket } from "./types.js";
 import { pushJob } from "../queue/client.js";
+import { registerSession } from "../queue/notification-listener.js";
 import path from "path";
 
 
@@ -37,6 +38,7 @@ export const leaveGroupCall = (ws: WorkspaceSocket) => {
 		broadcastToRoom(workspaceId, "GROUP_CALL_ENDED", { reason: "starter_left" });
 
 		// Trigger AI processing job
+		registerSession(call.sessionId, workspaceId);
 		pushJob("PROCESS_MEETING", {
 			sessionId: call.sessionId,
 			filePath: path.join(process.cwd(), 'recordings', `${call.sessionId}.webm`),
@@ -62,6 +64,7 @@ export const leaveGroupCall = (ws: WorkspaceSocket) => {
 			broadcastToRoom(workspaceId, "GROUP_CALL_ENDED", { reason: "empty" });
 
 			// Trigger AI processing job
+			registerSession(call.sessionId, workspaceId);
 			pushJob("PROCESS_MEETING", {
 				sessionId: call.sessionId,
 				filePath: path.join(process.cwd(), 'recordings', `${call.sessionId}.webm`),

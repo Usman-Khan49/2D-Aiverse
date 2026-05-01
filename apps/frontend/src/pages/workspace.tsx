@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { PhaserGame } from "../components/PhaserGame";
+import { MeetingSummaryModal } from "../components/MeetingSummaryModal";
+import { KnowledgeLibraryModal } from "../components/KnowledgeLibraryModal";
 
 const WS_BASE = import.meta.env.VITE_WS_BASE_URL?.replace(/\/$/, "") ??
   "ws://localhost:4000";
@@ -46,6 +48,14 @@ export function WorkspaceRoom({
   const [amInGroupCall, setAmInGroupCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+  
+  // Summary State
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+  const [summaryData, setSummaryData] = useState<any>(null);
+  
+  // Library State
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [isNearLibrary, setIsNearLibrary] = useState(false);
 
 
 
@@ -142,6 +152,11 @@ export function WorkspaceRoom({
           // Dispatch all other messages (like CURRENT_PLAYERS, NEW_PLAYER, etc) to window for Phaser to pick up
           window.dispatchEvent(new CustomEvent("ws-message", { detail: data }));
           
+          // Also dispatch a specific event for React components to listen to
+          if (data.type) {
+            window.dispatchEvent(new CustomEvent(data.type, { detail: data.payload }));
+          }
+          
         } catch (err) {
           console.error("Failed to parse WS message", err);
         }
@@ -202,6 +217,28 @@ export function WorkspaceRoom({
       cancelled = true;
     };
   }, [getToken]);
+
+  const fetchSummary = async (sessionId: string) => {
+    const token = await getToken();
+    const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000/api/v1";
+    
+    try {
+      const response = await fetch(`${API_BASE}/sessions/${sessionId}/summary`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: "include",
+      });
+      
+      if (!response.ok) throw new Error("Failed to fetch summary");
+      
+      const data = await response.json();
+      setSummaryData(data);
+      setIsSummaryModalOpen(true);
+    } catch (err) {
+      console.error("Error fetching summary:", err);
+      setNotification("Failed to load meeting summary.");
+      setTimeout(() => setNotification(null), 4000);
+    }
+  };
 
   useEffect(() => {
     const handlePlayerSelected = (e: Event) => {
@@ -317,6 +354,24 @@ export function WorkspaceRoom({
     window.addEventListener("group-call-ended", handleGroupCallEnded);
     window.addEventListener("group-call-participants", handleGroupCallParticipants);
     
+    const handleSummaryReady = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      console.log("AI Summary is ready!", data.sessionId);
+      setNotification("✨ AI Meeting Summary is ready!");
+      fetchSummary(data.sessionId);
+    };
+    window.addEventListener("SUMMARY_READY", handleSummaryReady);
+    
+    const handleNearLibrary = (e: Event) => {
+      setIsNearLibrary((e as CustomEvent).detail.near);
+    };
+    const handleOpenLibrary = () => {
+      setIsLibraryOpen(true);
+    };
+
+    window.addEventListener("near-library", handleNearLibrary);
+    window.addEventListener("open-library", handleOpenLibrary);
+    
     return () => {
       window.removeEventListener("player-selected", handlePlayerSelected);
       window.removeEventListener("incoming-call", handleIncomingCall);
@@ -330,6 +385,9 @@ export function WorkspaceRoom({
       window.removeEventListener("group-call-user-left", handleGroupCallUserLeft);
       window.removeEventListener("group-call-ended", handleGroupCallEnded);
       window.removeEventListener("group-call-participants", handleGroupCallParticipants);
+      window.removeEventListener("SUMMARY_READY", handleSummaryReady);
+      window.removeEventListener("near-library", handleNearLibrary);
+      window.removeEventListener("open-library", handleOpenLibrary);
     };
 
   }, []);
@@ -399,6 +457,23 @@ export function WorkspaceRoom({
       overflow: "hidden"
     }}>
       <PhaserGame socket={activeSocket} />
+
+      <MeetingSummaryModal 
+        isOpen={isSummaryModalOpen} 
+        onClose={() => setIsSummaryModalOpen(false)} 
+        data={summaryData} 
+      />
+
+      <KnowledgeLibraryModal 
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        workspaceId={workspace.id}
+        getToken={getToken}
+        onSelectSummary={(sessionId) => {
+          setIsLibraryOpen(false);
+          fetchSummary(sessionId);
+        }}
+      />
       
       <div className="workspace-ui" style={{ 
         position: "absolute", 
@@ -413,6 +488,28 @@ export function WorkspaceRoom({
         flexDirection: "column",
         gap: "20px"
       }}>
+        {/* Interaction Label */}
+        {isNearLibrary && !isLibraryOpen && (
+          <div style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: '100px',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '10px 20px',
+            borderRadius: '12px',
+            fontWeight: 'bold',
+            fontSize: '1.2rem',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+            animation: 'pulse 1.5s infinite',
+            zIndex: 100,
+            pointerEvents: 'none'
+          }}>
+            📖 Press <span style={{ color: '#6366f1', background: 'white', padding: '2px 8px', borderRadius: '4px', margin: '0 4px' }}>E</span> to View Archive
+          </div>
+        )}
+
         {/* Top Header UI */}
         <div style={{ 
           display: "flex", 

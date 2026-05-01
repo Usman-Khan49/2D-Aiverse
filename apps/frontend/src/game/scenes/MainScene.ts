@@ -20,6 +20,9 @@ export class MainScene extends Phaser.Scene {
   private myUserId: string | null = null;
   private currentZoneType: string | null = null;
   private zones: GameZone[] = [];
+  private libraryProp!: Phaser.GameObjects.Sprite;
+  private isNearLibrary = false;
+  private eKey!: Phaser.Input.Keyboard.Key;
   private wsMessageListener = this.handleWsMessage.bind(this);
   private initiateCallListener = (e: Event) => {
     const targetUserId = (e as CustomEvent).detail.userId;
@@ -268,6 +271,18 @@ export class MainScene extends Phaser.Scene {
     bushGraphics.fillStyle(0x166534, 1);
     bushGraphics.fillCircle(8, 8, 8);
     bushGraphics.generateTexture("bush", 16, 16);
+
+    // Create Library Prop Texture
+    const libGraphics = this.make.graphics({ x: 0, y: 0 });
+    libGraphics.fillStyle(0x4f46e5, 1); // Primary indigo
+    libGraphics.fillRect(0, 0, 32, 32);
+    libGraphics.lineStyle(2, 0xffffff, 1);
+    libGraphics.strokeRect(4, 4, 24, 24);
+    // Add "pages" look
+    libGraphics.fillStyle(0xffffff, 1);
+    libGraphics.fillRect(8, 8, 16, 4);
+    libGraphics.fillRect(8, 16, 16, 4);
+    libGraphics.generateTexture("library_prop", 32, 32);
   }
 
   create() {
@@ -353,7 +368,14 @@ export class MainScene extends Phaser.Scene {
 
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
+      this.eKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     }
+
+    // Add Library Prop in Knowledge Zone
+    const libX = officeX + zoneWidth + zoneWidth/2;
+    const libY = officeY + zoneHeight + zoneHeight/2;
+    this.libraryProp = this.add.sprite(libX, libY, "library_prop");
+    this.physics.add.existing(this.libraryProp, true);
   }
 
   private createAnimations() {
@@ -437,6 +459,19 @@ export class MainScene extends Phaser.Scene {
         this.currentZoneType = null;
         window.dispatchEvent(new CustomEvent("zone-entered", { detail: { type: null } }));
       }
+    }
+
+    // Check interaction with Library Prop
+    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.libraryProp.x, this.libraryProp.y);
+    const near = dist < 60;
+    
+    if (near !== this.isNearLibrary) {
+      this.isNearLibrary = near;
+      window.dispatchEvent(new CustomEvent("near-library", { detail: { near } }));
+    }
+
+    if (this.isNearLibrary && Phaser.Input.Keyboard.JustDown(this.eKey)) {
+      window.dispatchEvent(new CustomEvent("open-library"));
     }
   }
 }

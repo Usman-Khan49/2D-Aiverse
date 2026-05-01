@@ -6,6 +6,7 @@ import psycopg2
 from dotenv import load_dotenv
 from src.jobs.transcribe import run_transcription_job
 from src.jobs.summarize import run_chunk_summarization_job, run_final_synthesis_job
+from src.services.notify import NotifyService
 
 load_dotenv()
 
@@ -161,6 +162,10 @@ def handle_process_meeting(data):
             }, f, indent=2)
             
         print(f"[FINISHED] Processed meeting {session_id}")
+        
+        # 5. Notify Backend
+        notifier = NotifyService()
+        notifier.notify_summary_ready(session_id)
         
     except Exception as e:
         print(f"[JOB FAILED] {e}")

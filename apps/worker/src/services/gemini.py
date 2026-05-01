@@ -22,10 +22,13 @@ class GeminiService:
         prompt = f"""
         Analyze the following meeting transcript segment and provide a concise summary.
         Extract the following in a structured JSON format:
-        1. decisions: A list of key decisions made.
-        2. openQuestions: A list of questions that were raised but not resolved.
-        3. risks: Any potential risks or blockers mentioned.
-        4. mainTopics: A brief list of the main topics discussed.
+        1. title: A catchy title for the meeting.
+        2. overview: A one-paragraph summary of the discussion.
+        3. keyPoints: A list of the most important takeaways or decisions.
+        4. actionItems: A list of specific tasks or next steps.
+        5. decisions: (Same as keyPoints, for database storage)
+        6. openQuestions: Any unresolved points.
+        7. risks: Any blockers or risks mentioned.
 
         Transcript:
         {transcript_text}

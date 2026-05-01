@@ -355,6 +355,42 @@ workspaceRoute.delete("/:workspaceId/members/:memberId", async (req, res) => {
     res.status(200).json({ message: "Member removed from workspace" });
 });
 
+// Get all summaries for a workspace
+workspaceRoute.get("/:workspaceId/summaries", async (req, res) => {
+    const { workspaceId } = req.params;
+    const { userId } = getAuth(req);
+
+    if (!userId || !workspaceId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const summaries = await db.summary.findMany({
+            where: {
+                session: {
+                    workspaceId: workspaceId
+                }
+            },
+            include: {
+                session: {
+                    select: {
+                        startedAt: true,
+                        areaTag: true
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        res.json({ summaries });
+    } catch (error) {
+        console.error("[WorkspaceRoute] Error fetching summaries:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 workspaceRoute.use('/:workspaceId', zoneRoute);
 
 
