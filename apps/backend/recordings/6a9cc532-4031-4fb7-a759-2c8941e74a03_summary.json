@@ -1,0 +1,29 @@
+{
+  "sessionId": "6a9cc532-4031-4fb7-a759-2c8941e74a03",
+  "transcript": [
+    {
+      "speaker": "Speaker A",
+      "start": 2.339,
+      "end": 58.15,
+      "text": "Okay, this is Usman, uh, testing the mic again. So the agenda of this meeting is to actually get info on some of the things that we were working on in the marketing department. And the marketing department has a campaign recently which did not go as well. Uh, the resources were depleted but the performance or analytics that we were looking for were not delivered or were not up to par with what we expected the results to be. Um, I don't know what it is that went wrong, so can anybody in the meeting actually give me an info on whether or not what went wrong."
+    }
+  ],
+  "summary": {
+    "summary": "Usman convened a meeting to investigate the underperformance of a recent marketing campaign that depleted its budget without meeting its analytical targets or expected results.",
+    "decisions": [],
+    "openQuestions": [
+      "What specifically went wrong with the recent marketing campaign?",
+      "Why did the performance analytics fail to meet expectations despite the depletion of resources?"
+    ],
+    "risks": [
+      "Resource depletion without achieving return on investment (ROI).",
+      "Failure to meet performance benchmarks and campaign KPIs."
+    ],
+    "mainTopics": [
+      "Marketing campaign performance review",
+      "Resource allocation and depletion",
+      "Performance analytics gap analysis"
+    ]
+  },
+  "processedAt": 1777636017.7990546
+}

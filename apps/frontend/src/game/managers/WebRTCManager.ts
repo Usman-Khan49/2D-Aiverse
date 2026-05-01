@@ -16,6 +16,8 @@ export class WebRTCManager {
   private myUserId: string | null = null;
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private iceServers: RTCIceServer[] | null = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordingInterval: number = 1000; // Send audio every 1 second
 
   constructor(socket: WebSocket | null, myUserId: string | null) {
 
@@ -78,6 +80,51 @@ export class WebRTCManager {
     })();
 
     return this.streamPromise;
+  }
+
+  // ── Audio Ingestion (Streaming to Backend) ──
+
+  private startAudioStreaming(stream: MediaStream) {
+    if (this.mediaRecorder) return;
+
+    console.log("WebRTC: Starting MediaRecorder for backend ingestion...");
+    
+    // Check supported types
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+      ? 'audio/webm;codecs=opus' 
+      : 'audio/webm';
+
+    try {
+      this.mediaRecorder = new MediaRecorder(stream, { mimeType });
+      
+      this.mediaRecorder.ondataavailable = async (event) => {
+        if (event.data.size > 0 && this.socket?.readyState === WebSocket.OPEN) {
+          // Convert Blob to Base64 to send via JSON WebSocket
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64data = (reader.result as string).split(',')[1];
+            this.sendWsMessage("AUDIO_CHUNK", {
+              chunk: base64data,
+              mimeType: mimeType,
+              ts: Date.now()
+            });
+          };
+          reader.readAsDataURL(event.data);
+        }
+      };
+
+      this.mediaRecorder.start(this.recordingInterval);
+    } catch (err) {
+      console.error("WebRTC: Failed to start MediaRecorder", err);
+    }
+  }
+
+  private stopAudioStreaming() {
+    if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+      console.log("WebRTC: Stopping MediaRecorder...");
+      this.mediaRecorder.stop();
+      this.mediaRecorder = null;
+    }
   }
 
   // ── Signaling: receive a WEBRTC_SIGNAL from another user ──
@@ -185,6 +232,11 @@ export class WebRTCManager {
       console.warn("WebRTC: Failed to get local stream before joining call", e);
     }
     this.sendWsMessage("JOIN_GROUP_CALL", {});
+    
+    // Start streaming if we have a stream
+    if (this.localStream) {
+      this.startAudioStreaming(this.localStream);
+    }
   }
 
   leaveGroupCall() {
@@ -198,6 +250,7 @@ export class WebRTCManager {
       this.streamPromise = null;
     }
     this.sendWsMessage("LEAVE_GROUP_CALL", {});
+    this.stopAudioStreaming();
   }
 
   toggleMute(mute: boolean) {
@@ -216,6 +269,10 @@ export class WebRTCManager {
       console.warn("WebRTC: Failed to get local stream before joining zone", e);
     }
     this.sendWsMessage("JOIN_AUDIO_ZONE", { zoneId });
+
+    if (this.localStream) {
+      this.startAudioStreaming(this.localStream);
+    }
   }
 
   leaveAudioZone() {
@@ -234,6 +291,7 @@ export class WebRTCManager {
     }
     
     this.sendWsMessage("LEAVE_AUDIO_ZONE", {});
+    this.stopAudioStreaming();
   }
 
   sendCallRequest(targetUserId: string) {

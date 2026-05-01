@@ -27,6 +27,8 @@ export type WsMessage = {
 		userId?: string;
 		targetUserId?: string;
 		signal?: any;
+		chunk?: string;
+		mimeType?: string;
 	};
 };
 

@@ -1,0 +1,34 @@
+{
+  "sessionId": "512af484-89b3-4f3f-90ad-68df556153b3",
+  "transcript": [
+    {
+      "speaker": "Speaker A",
+      "start": 2.104,
+      "end": 61.515,
+      "text": "Okay, this is Usman starting the meeting again, and the purpose of this meeting is to see who actually has a diaper rash and kept getting or kept using all of our toilet paper from the dispensary. Who the fuck uses 5 toilet paper rolls in one sitting. What the fuck were you eating, bro? Like, holy shit, bro. Like, what the fuck? The cleaner just passed out when he entered the bathroom stall. I could even smell it 3 floors up, and I I'm not even joking. Whoever it is, he needs to clean that shit up and also visit a doctor."
+    }
+  ],
+  "summary": {
+    "decisions": [
+      "The person responsible must clean up the bathroom stall.",
+      "The person responsible must visit a doctor."
+    ],
+    "openQuestions": [
+      "Who used five toilet paper rolls in one sitting?",
+      "What did the individual eat to cause the situation?"
+    ],
+    "risks": [
+      "Workplace hygiene and sanitation hazard (cleaner passed out).",
+      "Potential medical issue for the unidentified individual.",
+      "Depletion of office supplies (toilet paper dispensary).",
+      "Environmental/air quality issues affecting multiple floors."
+    ],
+    "mainTopics": [
+      "Excessive toilet paper usage",
+      "Bathroom sanitation incident",
+      "Identification of the person responsible",
+      "Medical concern and hygiene protocol"
+    ]
+  },
+  "processedAt": 1777636265.9042287
+}

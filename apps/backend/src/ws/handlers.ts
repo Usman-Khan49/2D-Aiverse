@@ -3,6 +3,9 @@ import { verifyToken } from "@clerk/express";
 import { WorkspaceSocket, WsMessage } from "./types.js";
 import { sendJson, validateWorkspaceMembership } from "./utils.js";
 import { joinWorkspace, getRoom, groupCalls, leaveGroupCall, broadcastToRoom } from "./room-manager.js";
+import { db } from "../db/client.js";
+import fs from "fs";
+import path from "path";
 
 export async function handleMessage(ws: WorkspaceSocket, raw: unknown, routeWorkspaceId: string) {
 	let data: WsMessage;
@@ -82,6 +85,10 @@ export async function handleMessage(ws: WorkspaceSocket, raw: unknown, routeWork
 		data.type === "CALL_ENDED"
 	) {
 		handleCallNegotiation(ws, data, routeWorkspaceId);
+		return;
+	}
+	if (data.type === "AUDIO_CHUNK") {
+		handleAudioChunk(ws, data);
 		return;
 	}
 
@@ -302,26 +309,60 @@ function sendGroupCallState(ws: WorkspaceSocket, routeWorkspaceId: string) {
 	}
 }
 
-function handleStartGroupCall(ws: WorkspaceSocket, routeWorkspaceId: string) {
-	if (!ws.userId) return;
+async function handleStartGroupCall(ws: WorkspaceSocket, routeWorkspaceId: string) {
+	const userId = ws.userId;
+	if (!userId) return;
 	
 	if (groupCalls.has(routeWorkspaceId)) {
 		sendJson(ws, { type: "ERROR", payload: { message: "Group call already active" } });
 		return;
 	}
 
+	// Create a session in the database
+	const session = await db.session.create({
+		data: {
+			workspaceId: routeWorkspaceId,
+			areaTag: "meeting", // Default to meeting for group calls
+			// Clerk IDs look like user_2pQ... so we split by the LAST underscore to remove our random suffix
+			startedById: userId.includes('_') ? userId.substring(0, userId.lastIndexOf('_')) : userId,
+		}
+	});
+
 	ws.inGroupCall = true;
 	const participants = new Set<string>();
-	participants.add(ws.userId);
+	participants.add(userId);
 	
 	groupCalls.set(routeWorkspaceId, {
-		starterId: ws.userId,
+		sessionId: session.id,
+		starterId: userId,
 		participants
 	});
 
 	broadcastToRoom(routeWorkspaceId, "GROUP_CALL_STARTED", {
-		starterId: ws.userId,
+		sessionId: session.id,
+		starterId: userId,
 		participants: Array.from(participants)
+	});
+}
+
+function handleAudioChunk(ws: WorkspaceSocket, data: WsMessage) {
+	const workspaceId = ws.workspaceId;
+	if (!workspaceId || !ws.inGroupCall) return;
+	
+	const call = groupCalls.get(workspaceId);
+	if (!call) return;
+
+	const { chunk } = data.payload || {};
+	if (!chunk) return;
+
+	const buffer = Buffer.from(chunk, 'base64');
+	const filePath = path.join(process.cwd(), 'recordings', `${call.sessionId}.webm`);
+
+	// Append to file asynchronously
+	fs.appendFile(filePath, buffer, (err) => {
+		if (err) {
+			console.error(`Failed to save audio chunk for session ${call.sessionId}`, err);
+		}
 	});
 }
 

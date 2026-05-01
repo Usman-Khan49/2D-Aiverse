@@ -24,9 +24,7 @@ export function DashboardHeader({ user, displayName, onAddClick }: DashboardHead
           <span>Add</span>
         </button>
         <SignOutButton>
-          <button className="signout-btn" type="button">
-            Sign out
-          </button>
+
         </SignOutButton>
       </div>
     </header>

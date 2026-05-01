@@ -1,0 +1,7 @@
+python-dotenv
+google-generativeai
+assemblyai
+redis
+numpy
+Flask
+psycopg2-binary

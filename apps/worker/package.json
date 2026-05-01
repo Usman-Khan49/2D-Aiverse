@@ -1,12 +1,11 @@
 {
   "name": "worker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+    "build": "echo 'Building Python Worker...' && pip install -r requirements.txt",
+    "dev": "python -u src/main.py",
+    "lint": "echo 'No linting configured for Python worker'",
+    "check-types": "echo 'No type checking configured for Python worker'"
+  }
 }

@@ -1,0 +1,26 @@
+[
+    {
+        "speaker": "Speaker A",
+        "start": "0.26",
+        "end": "3.38",
+        "text": "Hi, my name is John. Nice to meet you."
+    },
+    {
+        "speaker": "Speaker B",
+        "start": "4.52",
+        "end": "7.89",
+        "text": "Hi John, I'm Sarah. Nice to meet you too."
+    },
+    {
+        "speaker": "Speaker A",
+        "start": "9.10",
+        "end": "10.11",
+        "text": "How are you doing today?"
+    },
+    {
+        "speaker": "Speaker B",
+        "start": "11.35",
+        "end": "12.88",
+        "text": "I'm doing pretty well, thanks."
+    }
+]

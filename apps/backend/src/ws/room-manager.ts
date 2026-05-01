@@ -1,9 +1,13 @@
 import { WorkspaceSocket } from "./types.js";
+import { pushJob } from "../queue/client.js";
+import path from "path";
+
 
 // Workspace rooms only exist while at least one connection is active.
 const rooms = new Map<string, Set<WorkspaceSocket>>();
 
 export interface GroupCall {
+	sessionId: string;
 	starterId: string;
 	participants: Set<string>;
 }
@@ -31,7 +35,14 @@ export const leaveGroupCall = (ws: WorkspaceSocket) => {
 		// Starter left, end the call
 		groupCalls.delete(workspaceId);
 		broadcastToRoom(workspaceId, "GROUP_CALL_ENDED", { reason: "starter_left" });
-		
+
+		// Trigger AI processing job
+		pushJob("PROCESS_MEETING", {
+			sessionId: call.sessionId,
+			filePath: path.join(process.cwd(), 'recordings', `${call.sessionId}.webm`),
+			workspaceId: workspaceId
+		});
+
 		// Unset inGroupCall on all players
 		const room = rooms.get(workspaceId);
 		if (room) {
@@ -44,11 +55,18 @@ export const leaveGroupCall = (ws: WorkspaceSocket) => {
 		call.participants.delete(ws.userId);
 		ws.inGroupCall = false;
 		broadcastToRoom(workspaceId, "USER_LEFT_GROUP_CALL", { userId: ws.userId });
-		
+
 		if (call.participants.size === 0) {
 			// No one left, end call
 			groupCalls.delete(workspaceId);
 			broadcastToRoom(workspaceId, "GROUP_CALL_ENDED", { reason: "empty" });
+
+			// Trigger AI processing job
+			pushJob("PROCESS_MEETING", {
+				sessionId: call.sessionId,
+				filePath: path.join(process.cwd(), 'recordings', `${call.sessionId}.webm`),
+				workspaceId: workspaceId
+			});
 		}
 	}
 };

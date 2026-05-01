@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoomMind | AI Transcript Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <span class="icon">🎙️</span>
+                <h1>RoomMind</h1>
+            </div>
+            <div class="status-badge">AI Engine Active</div>
+        </header>
+
+        <main id="main-dashboard" style="display: none;">
+            <!-- Left Sidebar -->
+            <aside class="controls">
+                <div class="card">
+                    <h3>📊 Session Intel</h3>
+                    <div class="info-row">
+                        <span>Source File</span>
+                        <span id="session-file" class="value">Loading...</span>
+                    </div>
+                    <div class="info-row">
+                        <span>Duration</span>
+                        <span id="session-duration" class="value">--:--</span>
+                    </div>
+                    <div class="info-row">
+                        <span>Speakers</span>
+                        <span id="session-speakers" class="value">0 Identified</span>
+                    </div>
+                    <div class="actions-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <button id="export-btn" class="primary-btn" style="background: rgba(255,255,255,0.1); margin: 0;">Export PDF</button>
+                        <button id="upload-trigger-small" class="primary-btn" style="margin: 0;">New Upload</button>
+                    </div>
+                </div>
+
+                <div class="card speaker-list">
+                    <h3>🏷️ Speaker Identity</h3>
+                    <div id="speaker-legend-container">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Transcript Area -->
+            <section class="transcript-view card">
+                <div class="transcript-header">
+                    <h3>📜 Smart Transcript</h3>
+                </div>
+                <div class="transcript-container" id="transcript-content">
+                    <div class="loading">Analyzing conversation data...</div>
+                </div>
+            </section>
+
+            <!-- Right Chat Sidebar -->
+            <section class="chat-section">
+                <div class="card chat-card">
+                    <h3>🤖 Transcript AI</h3>
+                    <div class="chat-messages" id="chat-messages">
+                        <!-- Messages will appear here -->
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="Query the transcript...">
+                        <button id="send-btn" class="icon-btn">✨</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Initial Hero Upload Section -->
+        <div id="hero-upload" class="card" style="max-width: 600px; margin: 100px auto; text-align: center; padding: 50px;">
+            <div style="font-size: 4rem; margin-bottom: 20px;">🎙️</div>
+            <h2 style="font-family: 'Outfit'; font-size: 2rem; margin-bottom: 10px;">Ready to Transcribe?</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 30px;">Upload your audio file to start the AI analysis and Q&A.</p>
+            <button id="upload-trigger-hero" class="primary-btn" style="max-width: 250px; margin: 0 auto;">Upload Audio File</button>
+            <input type="file" id="audio-upload" style="display: none;" accept="audio/*,.mpeg,.mp3,.wav,.m4a,.ogg">
+        </div>
+    </div>
+
+    <script>
+        async function loadTranscript() {
+            try {
+                const response = await fetch('transcript_output.json');
+                if (!response.ok) throw new Error('Not found');
+                const data = await response.json();
+                renderDashboard(true);
+                renderTranscript(data);
+            } catch (e) {
+                console.error(e);
+                renderDashboard(false);
+            }
+        }
+
+        function renderTranscript(data) {
+            const container = document.getElementById('transcript-content');
+            const legendContainer = document.getElementById('speaker-legend-container');
+            container.innerHTML = '';
+            legendContainer.innerHTML = '';
+            
+            const speakers = new Set();
+            let maxEnd = 0;
+            data.forEach(s => {
+                speakers.add(s.speaker);
+                if (parseFloat(s.end) > maxEnd) maxEnd = parseFloat(s.end);
+            });
+
+            // Update UI
+            document.getElementById('session-file').innerText = lastUploadedFile || 'New Session';
+            const minutes = Math.floor(maxEnd / 60);
+            const seconds = Math.floor(maxEnd % 60);
+            document.getElementById('session-duration').innerText = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            document.getElementById('session-speakers').innerText = `${speakers.size} Identified`;
+
+            // Render Legend
+            speakers.forEach(speaker => {
+                const speakerColor = speaker === 'A1' ? '#ff4757' : 
+                                    speaker === 'A2' ? '#2ed573' : 
+                                    speaker === 'A3' ? '#1e90ff' : '#a855f7';
+                
+                const legendItem = document.createElement('div');
+                legendItem.className = 'speaker-item';
+                legendItem.innerHTML = `
+                    <span class="dot" style="background: ${speakerColor}"></span>
+                    <span class="name">${speaker}</span>
+                `;
+                legendContainer.appendChild(legendItem);
+            });
+
+            // Render Transcript
+            data.forEach((segment, index) => {
+                const item = document.createElement('div');
+                item.className = 'transcript-item';
+                
+                const speakerColor = segment.speaker === 'A1' ? '#ff4757' : 
+                                    segment.speaker === 'A2' ? '#2ed573' : 
+                                    segment.speaker === 'A3' ? '#1e90ff' : '#a855f7';
+
+                item.style.setProperty('--speaker-color', speakerColor);
+                item.style.animationDelay = `${index * 0.05}s`;
+
+                item.innerHTML = `
+                    <div class="item-meta">
+                        <span class="speaker-name" style="color: ${speakerColor}">${segment.speaker}</span>
+                        <span class="timestamp">${segment.start}s</span>
+                    </div>
+                    <div class="item-text">${segment.text}</div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // Chat Logic
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const chatMessages = document.getElementById('chat-messages');
+
+        async function sendQuestion() {
+            const question = chatInput.value.trim();
+            if (!question) return;
+
+            addMessage(question, 'user');
+            chatInput.value = '';
+
+            const loadingId = 'loading-' + Date.now();
+            addMessage('Processing...', 'bot', loadingId);
+
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const data = await response.json();
+                
+                document.getElementById(loadingId).remove();
+                addMessage(data.answer, 'bot');
+            } catch (e) {
+                if (document.getElementById(loadingId)) document.getElementById(loadingId).remove();
+                addMessage('Connection lost. Please ensure the backend server is running.', 'bot');
+            }
+        }
+
+        function addMessage(text, side, id = null) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `msg ${side}`;
+            if (id) msgDiv.id = id;
+            msgDiv.innerText = text;
+            chatMessages.appendChild(msgDiv);
+            
+            // Smooth scroll to bottom
+            setTimeout(() => {
+                chatMessages.scrollTo({
+                    top: chatMessages.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 50);
+        }
+
+        sendBtn.onclick = sendQuestion;
+        chatInput.onkeypress = (e) => { if (e.key === 'Enter') sendQuestion(); };
+
+        window.onload = () => {
+            // Force the upload screen on start, even if old data exists
+            renderDashboard(false);
+        };
+
+        // Upload Logic
+        const uploadTriggerHero = document.getElementById('upload-trigger-hero');
+        const uploadTriggerSmall = document.getElementById('upload-trigger-small');
+        const audioUpload = document.getElementById('audio-upload');
+        const transcriptContainer = document.getElementById('transcript-content');
+        const mainDashboard = document.getElementById('main-dashboard');
+        const heroUpload = document.getElementById('hero-upload');
+
+        const triggerUpload = () => audioUpload.click();
+        uploadTriggerHero.onclick = triggerUpload;
+        if (uploadTriggerSmall) uploadTriggerSmall.onclick = triggerUpload;
+
+        let lastUploadedFile = "";
+
+        audioUpload.onchange = async () => {
+            const file = audioUpload.files[0];
+            if (!file) return;
+
+            lastUploadedFile = file.name;
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Transition to dashboard and show processing
+            heroUpload.style.display = 'none';
+            mainDashboard.style.display = 'grid';
+            chatMessages.innerHTML = ''; // Clear chat history for new upload
+            
+            transcriptContainer.innerHTML = `
+                <div class="loading">
+                    <p style="font-size: 1.5rem; margin-bottom: 1rem;">🎧 Processing Audio...</p>
+                    <p>This may take a minute depending on file size.</p>
+                    <div class="progress-spinner" style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid var(--accent-primary); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                </div>
+            `;
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    addMessage('Transcription completed! You can now ask questions about the new audio.', 'bot');
+                    loadTranscript(); 
+                } else {
+                    alert('Error: ' + (data.error || 'Transcription failed'));
+                    renderDashboard(false);
+                }
+            } catch (e) {
+                alert('Connection error. Is the server running?');
+                renderDashboard(false);
+            }
+        };
+
+        function renderDashboard(hasData) {
+            if (hasData) {
+                heroUpload.style.display = 'none';
+                mainDashboard.style.display = 'grid';
+            } else {
+                heroUpload.style.display = 'block';
+                mainDashboard.style.display = 'none';
+            }
+        }
+
+        // Add Spin animation to CSS (dynamically or in style tag)
+        const style = document.createElement('style');
+        style.innerHTML = '@keyframes spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

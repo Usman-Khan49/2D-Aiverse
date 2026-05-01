@@ -1,0 +1,31 @@
+{
+  "sessionId": "0d4dc4bb-196a-48de-969e-f758f89e3e09",
+  "transcript": [
+    {
+      "speaker": "Speaker A",
+      "start": 2.119,
+      "end": 58.023,
+      "text": "Hi, this is Osman. Okay, so I don't know about it."
+    },
+    {
+      "speaker": "Speaker B",
+      "start": 61.895,
+      "end": 70.239,
+      "text": "Now there has to be something that is missing, but I think this is it."
+    }
+  ],
+  "summary": {
+    "decisions": [],
+    "openQuestions": [
+      "Identification of specific missing elements or information mentioned by Speaker B."
+    ],
+    "risks": [
+      "Potential for missing data or incomplete project components as noted by Speaker B."
+    ],
+    "mainTopics": [
+      "Initial greeting and introductions",
+      "Review of current progress and missing information"
+    ]
+  },
+  "processedAt": 1777635592.9050748
+}
