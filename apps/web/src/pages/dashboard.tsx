@@ -11,11 +11,9 @@ import { StatusMessages } from "../components/StatusMessages";
 import { parseWorkspaceInput } from "../utils/workspaceUtils";
 import { useDashboardStore } from "../store/useDashboardStore";
 import type { Workspace, WorkspaceMember } from "../store/useDashboardStore";
+import { API_BASE } from "../utils/config";
 import "../App.css";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://localhost:4000/api/v1";
 
 export function Dashboard() {
   const { getToken, isLoaded } = useAuth();

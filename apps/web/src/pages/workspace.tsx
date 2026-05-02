@@ -3,9 +3,8 @@ import { PhaserGame } from "../components/PhaserGame";
 import { MeetingSummaryModal } from "../components/MeetingSummaryModal";
 import { KnowledgeLibraryModal } from "../components/KnowledgeLibraryModal";
 import { MemoryQAPanel } from "../components/MemoryQAPanel";
+import { API_BASE, WS_BASE } from "../utils/config";
 
-const WS_BASE = import.meta.env.VITE_WS_BASE_URL?.replace(/\/$/, "") ??
-  "ws://localhost:4000";
 
 
 type Workspace = {
@@ -193,7 +192,6 @@ export function WorkspaceRoom({
   
     const loadTurn = async () => {
       const token = await getToken();
-      const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000/api/v1";
       try {
         const response = await fetch(`${API_BASE}/turn/credentials`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -222,7 +220,6 @@ export function WorkspaceRoom({
 
   const fetchSummary = async (sessionId: string) => {
     const token = await getToken();
-    const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000/api/v1";
     
     try {
       const response = await fetch(`${API_BASE}/sessions/${sessionId}/summary`, {

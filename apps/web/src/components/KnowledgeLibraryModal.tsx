@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { API_BASE } from '../utils/config';
 
 interface SummaryListItem {
     id: string;
@@ -38,7 +39,7 @@ export const KnowledgeLibraryModal: React.FC<KnowledgeLibraryModalProps> = ({
     const fetchSummaries = async () => {
         setLoading(true);
         const token = await getToken();
-        const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000/api/v1";
+
         
         try {
             const response = await fetch(`${API_BASE}/workspaces/${workspaceId}/summaries`, {

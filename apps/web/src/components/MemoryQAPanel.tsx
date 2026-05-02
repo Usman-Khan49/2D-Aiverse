@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { API_BASE } from '../utils/config';
 
 interface Source {
     sessionId: string;
@@ -45,7 +46,6 @@ export const MemoryQAPanel: React.FC<MemoryQAPanelProps> = ({ workspaceId, getTo
 
         try {
             const token = await getToken();
-            const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:4000/api/v1";
             
             const response = await fetch(`${API_BASE}/chat/${workspaceId}/query`, {
                 method: 'POST',
