@@ -1,31 +1,25 @@
-import { Redis } from "ioredis";
+import * as celery from "celery-node";
 
-const redisUrl = process.env.REDIS_URL;
+const redisUrl = process.env.REDIS_URL || "redis://localhost:6379/0";
 
-if (!redisUrl) {
-	console.warn("REDIS_URL not found in .env, Redis queue will not be available.");
-}
+const client = celery.createClient(
+	redisUrl,
+	redisUrl,
+	"ai_jobs"
+);
 
-export const redis = redisUrl ? new Redis(redisUrl) : null;
-
-export const QUEUE_NAME = "ai_jobs";
+const task = client.createTask("process_meeting_pipeline");
 
 export async function pushJob(type: string, data: any) {
-	if (!redis) {
-		console.warn("Redis not initialized, skipping job push.");
-		return;
-	}
-
-	const job = JSON.stringify({
-		type,
-		data,
-		timestamp: Date.now(),
-	});
-
-	try {
-		await redis.lpush(QUEUE_NAME, job);
-		console.log(`[Queue] Pushed job: ${type}`);
-	} catch (err) {
-		console.error("[Queue] Failed to push job:", err);
+	if (type === "PROCESS_MEETING") {
+		try {
+			console.log(`[Queue] Dispatching Celery task for session: ${data.sessionId}`);
+			await task.applyAsync([data]);
+			console.log(`[Queue] Successfully pushed Celery job.`);
+		} catch (err) {
+			console.error("[Queue] Failed to push Celery job:", err);
+		}
+	} else {
+		console.warn(`[Queue] Unknown job type for Celery: ${type}`);
 	}
 }

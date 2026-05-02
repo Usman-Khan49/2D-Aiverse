@@ -1,10 +1,10 @@
 {
-  "name": "worker",
+  "name": "@roommind/worker",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "echo 'Building Python Worker...' && pip install -r requirements.txt",
-    "dev": "python -u src/main.py",
+    "dev": "celery -A src.queue.worker worker --loglevel=info -P solo",
     "lint": "echo 'No linting configured for Python worker'",
     "check-types": "echo 'No type checking configured for Python worker'"
   }

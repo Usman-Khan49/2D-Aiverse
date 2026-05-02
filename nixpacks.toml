@@ -1,0 +1,12 @@
+# nixpacks.toml
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm install -g pnpm", "pnpm install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["pnpm --filter @roommind/backend build"]
+
+[start]
+cmd = "pnpm --filter @roommind/backend db:migrate && pnpm --filter @roommind/backend start"
