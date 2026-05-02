@@ -97,7 +97,7 @@ workspaceRoute.get("/", async (req, res) => {
     });
 
     res.json({
-        workspaces: memberships.map((membership) => ({
+        workspaces: memberships.map((membership: any) => ({
             ...membership.workspace,
             role: membership.role,
         })),
