@@ -14,7 +14,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     onClose, 
     messages,
     onSendMessage,
-    currentUserName
+    currentUserName: _currentUserName
 }) => {
     const [inputValue, setInputValue] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -57,7 +57,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                 )}
 
                 {messages.map((msg, idx) => {
-                    const isSystem = false; // Add system msg feature if needed in the future
+                    // Add system msg feature if needed in the future
                     
                     return (
                         <div key={idx} style={{ 
