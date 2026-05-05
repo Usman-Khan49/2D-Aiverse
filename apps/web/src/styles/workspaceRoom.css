@@ -29,6 +29,17 @@
   overflow-y: auto;
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
+.workspace-sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.workspace-sidebar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 .sidebar-header {
   padding: var(--space-6);
   border-bottom: 1px solid var(--color-border);

@@ -11,6 +11,13 @@ export const parseWorkspaceInput = (raw: string) => {
 
   try {
     const url = new URL(value);
+
+    // Support ?join=slug query param (our invite link format)
+    const joinParam = url.searchParams.get('join');
+    if (joinParam?.trim()) {
+      return { workspaceSlug: joinParam.trim() };
+    }
+
     const parts = url.pathname.split("/").filter(Boolean);
     const workspaceIndex = parts.findIndex(
       (part) => part.toLowerCase() === "workspaces",
@@ -19,8 +26,13 @@ export const parseWorkspaceInput = (raw: string) => {
     if (workspaceIndex >= 0 && parts[workspaceIndex + 1]) {
       return { workspaceSlug: decodeURIComponent(parts[workspaceIndex + 1]) };
     }
+
+    // Fallback: use the last path segment as the slug (e.g. domain/acme-studio)
+    if (parts.length > 0) {
+      return { workspaceSlug: decodeURIComponent(parts[parts.length - 1]) };
+    }
   } catch {
-    // not a URL
+    // not a URL — treat as raw slug or id below
   }
 
   if (looksLikeUuid(value)) {

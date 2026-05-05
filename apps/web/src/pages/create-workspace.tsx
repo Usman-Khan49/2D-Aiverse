@@ -58,8 +58,9 @@ export function CreateWorkspacePage({
 
   const handleCopyInvite = () => {
     if (workspace?.slug) {
-      navigator.clipboard.writeText(`${domain}/${workspace.slug}`);
-      alert("Invite link copied to clipboard!");
+      const inviteUrl = `${window.location.origin}?join=${workspace.slug}`;
+      navigator.clipboard.writeText(inviteUrl);
+      alert("Invite link copied!\n\n" + inviteUrl);
     }
   };
 

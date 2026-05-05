@@ -3,6 +3,7 @@ import { PhaserGame } from "../components/PhaserGame";
 import { MeetingSummaryModal } from "../components/MeetingSummaryModal";
 import { KnowledgeLibraryModal } from "../components/KnowledgeLibraryModal";
 import { MemorySidebar } from "../components/MemorySidebar";
+import { ChatSidebar } from "../components/ChatSidebar";
 import { useDashboardStore } from "../store/useDashboardStore";
 import { API_BASE, WS_BASE } from "../utils/config";
 import "../styles/workspaceRoom.css";
@@ -62,6 +63,18 @@ export function WorkspaceRoom({
 
   // Memory State
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  // Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  // Invite link state
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const copyInviteLink = () => {
+    const inviteUrl = `${window.location.origin}?join=${workspace.slug}`;
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  };
 
   // Call Timer State
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
@@ -483,12 +496,24 @@ export function WorkspaceRoom({
             <h2>{workspace.name}</h2>
             <p><span className="status-dot"></span> {onlineUserIds.length + 1} {onlineUserIds.length + 1 === 1 ? 'person' : 'people'} online</p>
           </div>
+          <button
+            className="settings-btn"
+            onClick={copyInviteLink}
+            title="Copy invite link"
+            style={{ marginLeft: 'auto', flexShrink: 0 }}
+          >
+            {linkCopied ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+            )}
+          </button>
         </div>
 
         <div className="sidebar-nav">
           <nav className="nav-menu">
             <div className="nav-section-title">Navigation</div>
-            <a href="#" className="nav-item active">
+            <a href="#" className="nav-item">
               <div className="nav-item-content">
                 <div className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
@@ -497,16 +522,6 @@ export function WorkspaceRoom({
               </div>
             </a>
             
-            <a href="#" className="nav-item">
-              <div className="nav-item-content">
-                <div className="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                </div>
-                <span>Action Items</span>
-              </div>
-              <span className="nav-badge">4</span>
-            </a>
-
             <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); setIsLibraryOpen(true); }}>
               <div className="nav-item-content">
                 <div className="nav-icon">
@@ -516,7 +531,7 @@ export function WorkspaceRoom({
               </div>
             </a>
 
-            <a href="#" className="nav-item">
+            <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); setIsChatOpen(true); }}>
               <div className="nav-item-content">
                 <div className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
@@ -695,6 +710,23 @@ export function WorkspaceRoom({
           setHighlightOffset(offset);
           fetchSummary(sessionId);
         }}
+      />
+      
+      <ChatSidebar
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        messages={_messages}
+        onSendMessage={(msg) => {
+            if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
+                // Determine user name to prepend if desired, or let backend do it. 
+                // The prompt says previously it just sent CHAT_MESSAGE. The old implementation:
+                activeSocket.send(JSON.stringify({
+                    type: "CHAT_MESSAGE",
+                    payload: { message: `${displayName}: ${msg}` } // Send as formatted text, adjust if backend expects just 'message'
+                }));
+            }
+        }}
+        currentUserName={displayName}
       />
       
       {/* Call UI Overlays */}

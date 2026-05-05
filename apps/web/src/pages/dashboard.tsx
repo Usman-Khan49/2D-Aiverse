@@ -173,6 +173,42 @@ export function Dashboard() {
     void loadWorkspaces();
   }, [isLoaded, loadWorkspaces]);
 
+  // Auto-join from invite link: ?join=slug
+  useEffect(() => {
+    if (!isLoaded) return;
+    const params = new URLSearchParams(window.location.search);
+    const joinSlug = params.get('join');
+    if (!joinSlug) return;
+
+    // Clear the query param from the URL without a reload
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+
+    // Pre-fill and auto-submit the join form
+    setJoinInput(joinSlug);
+    setSubmitting(true);
+    resetFeedback();
+
+    apiFetch<{ workspace: any }>('/workspaces/join', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceSlug: joinSlug }),
+    })
+      .then(async (data) => {
+        setSuccess('Joined workspace!');
+        await loadWorkspaces();
+        await openWorkspace(data.workspace);
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : 'Failed to join workspace';
+        setError(message);
+      })
+      .finally(() => {
+        setSubmitting(false);
+        setJoinInput('');
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
+
 
   // Navigation
   const openWorkspace = async (workspace: Workspace) => {
