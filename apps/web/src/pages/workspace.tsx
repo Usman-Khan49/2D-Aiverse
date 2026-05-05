@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { PhaserGame } from "../components/PhaserGame";
 import { MeetingSummaryModal } from "../components/MeetingSummaryModal";
 import { KnowledgeLibraryModal } from "../components/KnowledgeLibraryModal";
-import { MemoryQAPanel } from "../components/MemoryQAPanel";
+import { MemorySidebar } from "../components/MemorySidebar";
 import { useDashboardStore } from "../store/useDashboardStore";
 import { API_BASE, WS_BASE } from "../utils/config";
 import "../styles/workspaceRoom.css";
@@ -59,6 +59,9 @@ export function WorkspaceRoom({
   // Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [_isNearLibrary, setIsNearLibrary] = useState(false);
+
+  // Memory State
+  const [isMemoryOpen, setIsMemoryOpen] = useState(false);
 
   // Call Timer State
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
@@ -522,7 +525,7 @@ export function WorkspaceRoom({
               </div>
             </a>
 
-            <a href="#" className="nav-item">
+            <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); setIsMemoryOpen(true); }}>
               <div className="nav-item-content">
                 <div className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
@@ -683,7 +686,9 @@ export function WorkspaceRoom({
         }}
       />
 
-      <MemoryQAPanel 
+      <MemorySidebar 
+        isOpen={isMemoryOpen}
+        onClose={() => setIsMemoryOpen(false)}
         workspaceId={workspace.id}
         getToken={getToken}
         onViewSource={(sessionId, offset) => {
