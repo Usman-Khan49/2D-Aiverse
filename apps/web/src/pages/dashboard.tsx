@@ -1,18 +1,19 @@
 import { useAuth, useUser } from "@clerk/react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
 import { WorkspaceRoom } from "./workspace";
-import { DashboardHeader } from "../components/DashboardHeader";
-import { WorkspaceSection } from "../components/WorkspaceSection";
+import { DashboardHeader } from "../components/dashboard/DashboardHeader";
+import { WorkspaceCard } from "../components/dashboard/WorkspaceCard";
+import { InviteBanner } from "../components/dashboard/InviteBanner";
 import { JoinWorkspaceDialog } from "../components/JoinWorkspaceDialog";
-import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
+import { CreateWorkspacePage } from "./create-workspace";
 import { StatusMessages } from "../components/StatusMessages";
 import { parseWorkspaceInput } from "../utils/workspaceUtils";
 import { useDashboardStore } from "../store/useDashboardStore";
 import type { Workspace, WorkspaceMember } from "../store/useDashboardStore";
 import { API_BASE } from "../utils/config";
-import "../App.css";
+import "../styles/dashboard.css";
 
 
 export function Dashboard() {
@@ -24,11 +25,13 @@ export function Dashboard() {
     view, setView,
     workspaces, setWorkspaces,
     selectedWorkspace, setSelectedWorkspace,
+    createdWorkspace, setCreatedWorkspace,
     selectedMembers, setSelectedMembers,
     showJoinDialog, setShowJoinDialog,
-    showCreateDialog, setShowCreateDialog,
+    createStep, setCreateStep,
     joinInput, setJoinInput,
     createName, setCreateName,
+    createSlug, setCreateSlug,
     loadingWorkspaces, setLoadingWorkspaces,
     loadingMembers, setLoadingMembers,
     submitting, setSubmitting,
@@ -66,6 +69,18 @@ export function Dashboard() {
       selectedWorkspace.ownerId
     );
   }, [selectedMembers, selectedWorkspace]);
+
+  // Tab State
+  const [activeTab, setActiveTab] = useState<"joined" | "created">("joined");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const displayedWorkspaces = useMemo(() => {
+    let list = activeTab === "created" ? ownedWorkspaces : joinedWorkspaces;
+    if (searchQuery) {
+      list = list.filter(w => w.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    return list;
+  }, [activeTab, ownedWorkspaces, joinedWorkspaces, searchQuery]);
 
 
   // API Helper
@@ -206,6 +221,7 @@ export function Dashboard() {
   const onCreateWorkspace = async (event: FormEvent) => {
     event.preventDefault();
     const name = createName.trim();
+    const slug = createSlug.trim() || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     if (!name) {
       setError("Workspace name is required.");
@@ -218,14 +234,15 @@ export function Dashboard() {
     try {
       const data = await apiFetch<{ workspace: Workspace }>("/workspaces", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, slug }),
       });
 
       setCreateName("");
-      setShowCreateDialog(false);
+      setCreateSlug("");
+      setCreatedWorkspace(data.workspace);
       setSuccess("Workspace created.");
       await loadWorkspaces();
-      await openWorkspace(data.workspace);
+      setCreateStep(2);
     } catch (createError) {
       const message =
         createError instanceof Error
@@ -251,28 +268,44 @@ export function Dashboard() {
     );
   }
 
-  // Render: Landing View
-  if (view === "landing") {
+  // Render: Create Workspace View
+  if (view === "create-workspace") {
     return (
-      <div className="landing-page">
-        <div>
-          <h1>Aiverse</h1>
-          <p>Build and explore workspaces with your team.</p>
-        </div>
-        <button className="cta-btn" onClick={() => setView("dashboard")}>
-          Get Started
-        </button>
-      </div>
+      <CreateWorkspacePage
+        step={createStep}
+        setStep={setCreateStep}
+        nameInput={createName}
+        slugInput={createSlug}
+        isSubmitting={submitting}
+        onNameChange={(name) => {
+          setCreateName(name);
+          setCreateSlug(name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''));
+        }}
+        onSlugChange={setCreateSlug}
+        onSubmit={onCreateWorkspace}
+        onCancel={() => setView("dashboard")}
+        workspace={createdWorkspace}
+        onEnterOffice={async () => {
+          if (createdWorkspace) {
+            await openWorkspace(createdWorkspace);
+            setCreatedWorkspace(null);
+            setCreateStep(1);
+          }
+        }}
+      />
     );
   }
 
   // Render: Dashboard View
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-layout">
       <DashboardHeader
         user={user}
         displayName={displayName}
-        onAddClick={() => setShowJoinDialog(true)}
+        onCreateClick={() => {
+          setCreateStep(1);
+          setView("create-workspace");
+        }}
       />
 
       <StatusMessages
@@ -281,25 +314,60 @@ export function Dashboard() {
         loadingMembers={loadingMembers}
       />
 
-      <WorkspaceSection
-        title="Owned Workspaces"
-        workspaces={ownedWorkspaces}
-        isLoading={loadingWorkspaces}
-        emptyMessage="No owned workspaces yet."
-        onWorkspaceClick={openWorkspace}
-        actionButton={{
-          label: "Create",
-          onClick: () => setShowCreateDialog(true),
-        }}
-      />
+      <main className="dashboard-content">
+        <div className="dashboard-actions-row">
+          <div className="dashboard-tabs">
+            <button 
+              className={`tab-btn ${activeTab === "joined" ? "active" : ""}`}
+              onClick={() => setActiveTab("joined")}
+            >
+              Joined Spaces
+            </button>
+            <button 
+              className={`tab-btn ${activeTab === "created" ? "active" : ""}`}
+              onClick={() => setActiveTab("created")}
+            >
+              Created Spaces
+            </button>
+          </div>
+          
+          <div className="search-bar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-text-muted)" }}>
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input 
+              type="text" 
+              placeholder="Search workspaces..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
 
-      <WorkspaceSection
-        title="Joined Workspaces"
-        workspaces={joinedWorkspaces}
-        isLoading={loadingWorkspaces}
-        emptyMessage="No joined workspaces yet."
-        onWorkspaceClick={openWorkspace}
-      />
+        <InviteBanner onJoinClick={() => setShowJoinDialog(true)} />
+
+        <div className="workspace-grid">
+          {loadingWorkspaces && <div className="empty-state">Loading workspaces...</div>}
+          {!loadingWorkspaces && displayedWorkspaces.length === 0 && (
+             <div className="empty-state">
+               <p>No workspaces found.</p>
+             </div>
+          )}
+          {!loadingWorkspaces && displayedWorkspaces.map((workspace) => (
+            <WorkspaceCard
+              key={workspace.id}
+              workspace={workspace}
+              onClick={openWorkspace}
+              onlineCount={Math.floor(Math.random() * 5)} // Mocking online count for UI
+            />
+          ))}
+        </div>
+
+        <div className="dashboard-footer">
+          Looking for an older workspace? <a href="#" className="classic-link">Open classic dashboard ↗</a>
+        </div>
+      </main>
 
       <JoinWorkspaceDialog
         isOpen={showJoinDialog}
@@ -309,15 +377,6 @@ export function Dashboard() {
         onSubmit={onJoinWorkspace}
         onClose={() => setShowJoinDialog(false)}
       />
-
-      <CreateWorkspaceDialog
-        isOpen={showCreateDialog}
-        input={createName}
-        isSubmitting={submitting}
-        onInputChange={setCreateName}
-        onSubmit={onCreateWorkspace}
-        onClose={() => setShowCreateDialog(false)}
-      />
     </div>
   );
-}
+}

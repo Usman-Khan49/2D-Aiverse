@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import '../styles/meetingSummaryModal.css';
 
 interface TranscriptSegment {
     speaker: string;
@@ -9,10 +10,21 @@ interface TranscriptSegment {
 interface SummaryData {
     summary: {
         title: string;
-        overview: string;
-        keyPoints: string[];
-        actionItems: string[];
+        overview?: string;
+        keyPoints?: string[];
+        decisions?: string[];
+        openQuestions?: string[];
+        risks?: string[];
+        actionItems?: string[];
+        actionItemsDetailed?: {
+            task: string;
+            priority: 'High' | 'Medium' | 'Low';
+        }[];
         sentiment?: string;
+        duration?: string;
+        date?: string;
+        startedAt?: string;
+        attendeesCount?: number;
     };
     transcript: TranscriptSegment[];
 }
@@ -25,147 +37,136 @@ interface MeetingSummaryModalProps {
 }
 
 export const MeetingSummaryModal: React.FC<MeetingSummaryModalProps> = ({ isOpen, onClose, data, highlightOffset }) => {
-    if (!isOpen || !data) return null;
+    const [activeTab, setActiveTab] = useState<'Summary' | 'Transcript' | 'Action Items'>('Summary');
 
-    const { summary, transcript } = data;
-
-    React.useEffect(() => {
-        if (isOpen && highlightOffset !== null && highlightOffset !== undefined) {
+    useEffect(() => {
+        if (isOpen && activeTab === 'Transcript' && highlightOffset !== null && highlightOffset !== undefined) {
             setTimeout(() => {
                 const el = document.getElementById('highlighted-segment');
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 500);
         }
-    }, [isOpen, highlightOffset]);
+    }, [isOpen, activeTab, highlightOffset]);
+
+    if (!isOpen || !data) return null;
+
+    const { summary, transcript } = data;
+
+    // Fallbacks to closely match the requested style if backend data doesn't have it yet
+    const decisions = summary.decisions || summary.keyPoints?.slice(0, 2) || [];
+    const openQuestions = summary.openQuestions || summary.keyPoints?.slice(2, 4) || [];
+    const risks = summary.risks || [];
+    
+    // Map existing action items text to detailed format, or empty if none
+    const actionItems = summary.actionItemsDetailed || summary.actionItems?.map(task => ({ task, priority: 'Medium' as const })) || [];
+
+    const meetingDateObj = summary.startedAt ? new Date(summary.startedAt) : new Date();
+    const displayDate = meetingDateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const displayTime = meetingDateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-            padding: '20px',
-            animation: 'fadeIn 0.3s ease-out'
-        }}>
-            <div style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                width: '100%',
-                maxWidth: '900px',
-                maxHeight: '90vh',
-                borderRadius: '24px',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                animation: 'scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
-            }}>
+        <div className="summary-modal-overlay" onClick={onClose}>
+            <div className="summary-modal-content" onClick={e => e.stopPropagation()}>
                 {/* Header */}
-                <div style={{
-                    padding: '24px 32px',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                    color: 'white',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>✨ Meeting Recap</h2>
-                        <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '0.9rem' }}>{summary.title || "AI Generated Summary"}</p>
+                <div className="summary-modal-header">
+                    <div className="summary-modal-header-top">
+                        <span className="summary-tag">Meeting Area</span>
+                        <div className="summary-header-actions">
+                            <button className="action-btn-outline">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: 4}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Export
+                            </button>
+                            <button className="action-btn-solid">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: 4}}><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                                Share
+                            </button>
+                            <button className="btn-close" onClick={onClose}>&times;</button>
+                        </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: 'rgba(255, 255, 255, 0.2)',
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: '40px',
-                            height: '40px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            color: 'white',
-                            fontSize: '20px',
-                            transition: 'all 0.2s'
-                        }}
-                    >
-                        &times;
-                    </button>
+
+                    <div className="summary-title-row">
+                        <div>
+                            <h2 className="summary-title">{summary.title || "AI Generated Summary"}</h2>
+                            <p className="summary-meta">{displayDate} &middot; {displayTime}</p>
+                        </div>
+                        <div className="summary-attendees-cluster">
+                            <div className="avatar-group">
+                                <div className="avatar-bubbles">
+                                    <div className="avatar-bubble" style={{ backgroundImage: 'url(https://api.dicebear.com/7.x/avataaars/svg?seed=Felix)' }}></div>
+                                    <div className="avatar-bubble" style={{ backgroundImage: 'url(https://api.dicebear.com/7.x/avataaars/svg?seed=Jude)' }}></div>
+                                    <div className="avatar-bubble" style={{ backgroundImage: 'url(https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah)' }}></div>
+                                </div>
+                                <span className="avatar-extras">+{summary.attendeesCount || 4} others</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Content */}
-                <div style={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    padding: '32px',
-                    display: 'grid',
-                    gridTemplateColumns: '1.5fr 1fr',
-                    gap: '32px'
-                }}>
-                    {/* Left Column: Summary & Insights */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                        <section>
-                            <h3 style={{ fontSize: '1.1rem', color: '#1f2937', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                📝 Overview
-                            </h3>
-                            <p style={{ color: '#4b5563', lineHeight: 1.6, fontSize: '1rem' }}>
-                                {summary?.overview || "No overview available."}
-                            </p>
-                        </section>
+                {/* Tabs */}
+                <div className="summary-tabs">
+                    <button className={`summary-tab ${activeTab === 'Summary' ? 'active' : ''}`} onClick={() => setActiveTab('Summary')}>Summary</button>
+                    <button className={`summary-tab ${activeTab === 'Transcript' ? 'active' : ''}`} onClick={() => setActiveTab('Transcript')}>Transcript</button>
+                    <button className={`summary-tab ${activeTab === 'Action Items' ? 'active' : ''}`} onClick={() => setActiveTab('Action Items')}>Action Items</button>
+                </div>
 
-                        <section>
-                            <h3 style={{ fontSize: '1.1rem', color: '#1f2937', marginBottom: '12px' }}>💡 Key Points</h3>
-                            <ul style={{ paddingLeft: '20px', margin: 0, color: '#4b5563' }}>
-                                {summary?.keyPoints?.map?.((point: string, i: number) => (
-                                    <li key={i} style={{ marginBottom: '8px', lineHeight: 1.5 }}>{point}</li>
-                                )) || <li>No key points identified.</li>}
-                            </ul>
-                        </section>
+                {/* Content Body */}
+                <div className="summary-modal-body">
+                    {activeTab === 'Summary' && (
+                        <>
+                            {decisions.length > 0 && (
+                                <div className="summary-section border-decisions">
+                                    <h3 className="section-label">Decisions</h3>
+                                    <ul className="section-list">
+                                        {decisions.map((decision, i) => (
+                                            <li key={i}>{decision}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
 
-                        {summary?.actionItems && summary.actionItems.length > 0 && (
-                            <section style={{
-                                backgroundColor: '#f5f3ff',
-                                padding: '20px',
-                                borderRadius: '16px',
-                                border: '1px solid #ddd6fe'
-                            }}>
-                                <h3 style={{ fontSize: '1.1rem', color: '#5b21b6', marginBottom: '12px', marginTop: 0 }}>✅ Action Items</h3>
-                                <ul style={{ paddingLeft: '20px', margin: 0, color: '#6d28d9' }}>
-                                    {summary.actionItems.map?.((item: string, i: number) => (
-                                        <li key={i} style={{ marginBottom: '8px', fontWeight: 500 }}>{item}</li>
-                                    )) || <li>No action items found.</li>}
-                                </ul>
-                            </section>
-                        )}
-                    </div>
+                            {openQuestions.length > 0 && (
+                                <div className="summary-section border-questions">
+                                    <h3 className="section-label">Open Questions</h3>
+                                    <ul className="section-list">
+                                        {openQuestions.map((q, i) => (
+                                            <li key={i}>{q}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
 
-                    {/* Right Column: Transcript Snippet */}
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '16px',
-                        backgroundColor: '#f9fafb',
-                        padding: '20px',
-                        borderRadius: '16px',
-                        border: '1px solid #e5e7eb'
-                    }}>
-                        <h3 style={{ fontSize: '1rem', color: '#1f2937', margin: 0 }}>🗣 Transcript</h3>
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '12px',
-                            fontSize: '0.9rem',
-                            maxHeight: '400px',
-                            overflowY: 'auto'
-                        }}>
+                            {risks.length > 0 && (
+                                <div className="summary-section border-risks">
+                                    <h3 className="section-label">Risks</h3>
+                                    <ul className="section-list">
+                                        {risks.map((r, i) => (
+                                            <li key={i}>{r}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {actionItems.length > 0 && (
+                                <div className="summary-section">
+                                    <h3 className="section-label">Action Items</h3>
+                                    <div>
+                                        {actionItems.slice(0, 3).map((item, i) => (
+                                            <div className="action-item-row" key={i}>
+                                                <input type="checkbox" className="action-item-checkbox" />
+                                                <span className="action-item-text">{item.task}</span>
+                                            </div>
+                                        ))}
+                                        {actionItems.length > 3 && (
+                                            <button className="view-all-link" onClick={() => setActiveTab('Action Items')}>View all action items</button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {activeTab === 'Transcript' && (
+                        <div>
                             {(() => {
                                 let cumulativeWords = 0;
                                 return transcript?.map?.((seg: any, i: number) => {
@@ -180,63 +181,37 @@ export const MeetingSummaryModal: React.FC<MeetingSummaryModalProps> = ({ isOpen
                                         <div 
                                             key={i} 
                                             id={isHighlighted ? 'highlighted-segment' : undefined}
-                                            style={{ 
-                                                borderLeft: isHighlighted ? '4px solid #f59e0b' : '3px solid #6366f1', 
-                                                paddingLeft: '12px',
+                                            className="transcript-segment"
+                                            style={{
                                                 backgroundColor: isHighlighted ? '#fff7ed' : 'transparent',
-                                                padding: isHighlighted ? '8px 12px' : '0 0 0 12px',
+                                                padding: isHighlighted ? '8px 12px' : '0',
                                                 borderRadius: isHighlighted ? '8px' : '0',
-                                                transition: 'all 0.5s'
+                                                borderLeft: isHighlighted ? '4px solid #f59e0b' : 'none'
                                             }}
                                         >
-                                            <div style={{ fontWeight: 700, color: isHighlighted ? '#d97706' : '#4338ca', fontSize: '0.8rem', textTransform: 'uppercase' }}>
-                                                {seg.speaker} {isHighlighted && "✨ RELEVANT PASSAGE"}
+                                            <div className="transcript-speaker" style={{ color: isHighlighted ? '#d97706' : '#111827' }}>
+                                                {seg.speaker} {isHighlighted && "✨ RELEVANT"}
                                             </div>
-                                            <div style={{ color: '#374151' }}>{seg.text}</div>
+                                            <div className="transcript-text">{seg.text}</div>
                                         </div>
                                     );
                                 });
-                            })() || <div>No transcript data.</div>}
+                            })() || <div>No transcript data available.</div>}
                         </div>
-                    </div>
-                </div>
+                    )}
 
-                {/* Footer */}
-                <div style={{
-                    padding: '20px 32px',
-                    borderTop: '1px solid #e5e7eb',
-                    backgroundColor: '#ffffff',
-                    display: 'flex',
-                    justifyContent: 'flex-end'
-                }}>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            padding: '10px 24px',
-                            backgroundColor: '#1f2937',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            transition: 'background 0.2s'
-                        }}
-                    >
-                        Close
-                    </button>
+                    {activeTab === 'Action Items' && (
+                         <div className="summary-section">
+                            {actionItems.map((item, i) => (
+                                <div className="action-item-row" key={i}>
+                                    <input type="checkbox" className="action-item-checkbox" />
+                                    <span className="action-item-text">{item.task}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
-
-            <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes scaleUp {
-                    from { transform: scale(0.9); opacity: 0; }
-                    to { transform: scale(1); opacity: 1; }
-                }
-            `}</style>
         </div>
     );
 };

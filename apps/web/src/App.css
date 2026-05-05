@@ -1,51 +1,4 @@
-:root {
-  --bg: #f2f3f2;
-  --surface: #ffffff;
-  --text: #1f2328;
-  --muted: #5e6570;
-  --line: #d2d8d4;
-  --green: #2fbf5a;
-  --green-dark: #219648;
-  --danger: #b42318;
-}
-
-.landing-page {
-  min-height: 100vh;
-  padding: 2rem;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  text-align: center;
-  color: var(--text);
-}
-
-.landing-page h1 {
-  margin: 1rem 0 0.5rem;
-  font-size: clamp(2rem, 5vw, 3.2rem);
-}
-
-.landing-page p {
-  margin: 0;
-  color: var(--muted);
-}
-
-.cta-btn {
-  border: none;
-  border-radius: 10px;
-  background: var(--green);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 600;
-  padding: 0.8rem 1.6rem;
-  cursor: pointer;
-  margin-bottom: 1.6rem;
-}
-
-.cta-btn:hover {
-  background: var(--green-dark);
-}
+/* Dashboard and Workspace Styles */
 
 .dashboard-page {
   max-width: 1200px;
@@ -206,7 +159,8 @@
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(43, 40, 36, 0.4);
+  backdrop-filter: blur(2px);
   display: grid;
   place-items: center;
   padding: 1rem;

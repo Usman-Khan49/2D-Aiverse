@@ -1,19 +1,6 @@
-* {
-  box-sizing: border-box;
-}
+@import "./styles/globals.css";
 
-body {
-  margin: 0;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: #f2f3f2;
-  color: #1f2328;
-}
-
-button,
-input {
-  font: inherit;
-}
-
+/* Project specific overrides if any */
 #root {
   min-height: 100vh;
 }

@@ -1,0 +1,120 @@
+.pricing {
+  background: var(--color-bg);
+}
+
+.pricing__grid {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-8);
+  margin-top: var(--space-16);
+  flex-wrap: wrap;
+}
+
+.pricing-card {
+  background: white;
+  border-radius: var(--radius-xl);
+  padding: var(--space-10);
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid var(--color-border);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.pricing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.pricing-card--popular {
+  border-color: var(--color-primary);
+}
+
+.pricing-card__popular-badge {
+  position: absolute;
+  top: 0;
+  right: var(--space-10);
+  background: var(--color-primary);
+  color: white;
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+
+.pricing-card__type {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  margin-bottom: var(--space-2);
+}
+
+.pricing-card__title {
+  font-size: var(--font-size-2xl);
+  font-weight: 800;
+  margin-bottom: var(--space-2);
+}
+
+.pricing-card__price {
+  font-size: var(--font-size-3xl);
+  font-weight: 800;
+  margin-bottom: var(--space-6);
+}
+
+.pricing-card__price span {
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  color: var(--color-text-light);
+}
+
+.pricing-card__features {
+  list-style: none;
+  margin-bottom: var(--space-10);
+  flex-grow: 1;
+}
+
+.pricing-card__feature {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-mid);
+}
+
+.pricing-card__feature svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.pricing-card__cta {
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pricing-card__cta--primary {
+  background: var(--color-neutral);
+  color: white;
+  border: none;
+}
+
+.pricing-card__cta--primary:hover {
+  background: black;
+}
+
+.pricing-card__cta--secondary {
+  background: white;
+  color: var(--color-neutral);
+  border: 1px solid var(--color-border);
+}
+
+.pricing-card__cta--secondary:hover {
+  background: var(--color-tertiary);
+}

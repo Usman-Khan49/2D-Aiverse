@@ -3,9 +3,9 @@ import { PhaserGame } from "../components/PhaserGame";
 import { MeetingSummaryModal } from "../components/MeetingSummaryModal";
 import { KnowledgeLibraryModal } from "../components/KnowledgeLibraryModal";
 import { MemoryQAPanel } from "../components/MemoryQAPanel";
+import { useDashboardStore } from "../store/useDashboardStore";
 import { API_BASE, WS_BASE } from "../utils/config";
-
-
+import "../styles/workspaceRoom.css";
 
 type Workspace = {
   id: string;
@@ -19,7 +19,7 @@ type Workspace = {
 export function WorkspaceRoom({
   workspace,
   displayName,
-  ownerName,
+  ownerName: _ownerName,
   getToken,
   onBack }: {
     workspace: Workspace,
@@ -28,26 +28,28 @@ export function WorkspaceRoom({
     getToken: () => Promise<string | null>,
     onBack: () => void
   }) {
-  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
-  const [copied, setCopied] = useState(false);
-  const [messages, setMessages] = useState<string[]>([]);
-  const [inputMessage, setInputMessage] = useState("");
+  const { selectedMembers } = useDashboardStore();
+  const [_connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const [_copied, _setCopied] = useState(false);
+  const [_messages, setMessages] = useState<string[]>([]);
+  const [_inputMessage, _setInputMessage] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
   const [activeSocket, setActiveSocket] = useState<WebSocket | null>(null);
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-  const [incomingCallUserId, setIncomingCallUserId] = useState<string | null>(null);
-  const [callStatus, setCallStatus] = useState<string | null>(null);
+  const [_selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [_incomingCallUserId, setIncomingCallUserId] = useState<string | null>(null);
+  const [_callStatus, setCallStatus] = useState<string | null>(null);
   const [activeCallUserId, setActiveCallUserId] = useState<string | null>(null);
   const [zoneMessage, setZoneMessage] = useState<string | null>(null);
-  const [zonePlayerCount, setZonePlayerCount] = useState<number>(0);
+  const [_zonePlayerCount, setZonePlayerCount] = useState<number>(0);
   
   // Group Call State
-  const [isMeetingZone, setIsMeetingZone] = useState(false);
-  const [groupCallActive, setGroupCallActive] = useState(false);
-  const [groupCallParticipants, setGroupCallParticipants] = useState<string[]>([]);
+  const [_isMeetingZone, setIsMeetingZone] = useState(false);
+  const [_groupCallActive, setGroupCallActive] = useState(false);
+  const [_groupCallParticipants, setGroupCallParticipants] = useState<string[]>([]);
   const [amInGroupCall, setAmInGroupCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [notification, setNotification] = useState<string | null>(null);
+  const [_notification, setNotification] = useState<string | null>(null);
   
   // Summary State
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
@@ -56,33 +58,34 @@ export function WorkspaceRoom({
   
   // Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [isNearLibrary, setIsNearLibrary] = useState(false);
+  const [_isNearLibrary, setIsNearLibrary] = useState(false);
 
+  // Call Timer State
+  const [callStartTime, setCallStartTime] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
-
-
-  const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/workspaces/${workspace.slug || workspace.id}`;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy", err);
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (activeCallUserId || amInGroupCall) {
+      if (!callStartTime) {
+        setCallStartTime(Date.now());
+      }
+      interval = setInterval(() => {
+        setElapsedSeconds(Math.floor((Date.now() - (callStartTime || Date.now())) / 1000));
+      }, 1000);
+    } else {
+      setCallStartTime(null);
+      setElapsedSeconds(0);
     }
-  };
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeCallUserId, amInGroupCall, callStartTime]);
 
-  const sendMessage = () => {
-    const msg = inputMessage.trim();
-    if (!msg || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
-
-    socketRef.current.send(
-      JSON.stringify({
-        type: "CHAT_MESSAGE",
-        payload: { message: msg },
-      }),
-    );
-    setInputMessage("");
+  const formatElapsed = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   useEffect(() => {
@@ -135,6 +138,24 @@ export function WorkspaceRoom({
           if (data.type === "JOINED") {
             console.log(`Joined room for workspace: ${data.payload?.workspaceId}`);
             return;
+          }
+
+          if (data.type === "CURRENT_PLAYERS") {
+            const players = data.payload?.players || [];
+            setOnlineUserIds(players.map((p: any) => p.userId));
+            // Let it fall through for Phaser
+          }
+
+          if (data.type === "NEW_PLAYER") {
+            const newUserId = data.payload?.userId;
+            if (newUserId) setOnlineUserIds(prev => [...prev.filter(id => id !== newUserId), newUserId]);
+            // Let it fall through for Phaser
+          }
+
+          if (data.type === "PLAYER_LEFT") {
+            const leftUserId = data.payload?.userId;
+            if (leftUserId) setOnlineUserIds(prev => prev.filter(id => id !== leftUserId));
+            // Let it fall through for Phaser
           }
 
           if (data.type === "ERROR") {
@@ -391,37 +412,37 @@ export function WorkspaceRoom({
 
   }, []);
 
-  const initiateCall = () => {
-    if (selectedPlayerId) {
-      setCallStatus("Dialing...");
-      setActiveCallUserId(selectedPlayerId);
-      window.dispatchEvent(new CustomEvent("initiate-call", { detail: { userId: selectedPlayerId } }));
-      setSelectedPlayerId(null);
-    }
-  };
 
-  const acceptCall = () => {
-    if (incomingCallUserId) {
-      setCallStatus("Connecting...");
-      setActiveCallUserId(incomingCallUserId);
-      window.dispatchEvent(new CustomEvent("accept-call", { detail: { userId: incomingCallUserId } }));
-      setIncomingCallUserId(null);
-    }
-  };
-
-
-  const declineCall = () => {
-    if (incomingCallUserId) {
-      window.dispatchEvent(new CustomEvent("decline-call", { detail: { userId: incomingCallUserId } }));
-      setIncomingCallUserId(null);
-    }
-  };
 
   const endCall = () => {
     if (!activeCallUserId) return;
     window.dispatchEvent(new CustomEvent("end-call", { detail: { userId: activeCallUserId } }));
     setCallStatus("Call Ended");
     setActiveCallUserId(null);
+  };
+  const initiateCall = () => {
+    if (_selectedPlayerId) {
+      setCallStatus("Dialing...");
+      setActiveCallUserId(_selectedPlayerId);
+      window.dispatchEvent(new CustomEvent("initiate-call", { detail: { userId: _selectedPlayerId } }));
+      setSelectedPlayerId(null);
+    }
+  };
+
+  const acceptCall = () => {
+    if (_incomingCallUserId) {
+      setCallStatus("Connecting...");
+      setActiveCallUserId(_incomingCallUserId);
+      window.dispatchEvent(new CustomEvent("accept-call", { detail: { userId: _incomingCallUserId } }));
+      setIncomingCallUserId(null);
+    }
+  };
+
+  const declineCall = () => {
+    if (_incomingCallUserId) {
+      window.dispatchEvent(new CustomEvent("decline-call", { detail: { userId: _incomingCallUserId } }));
+      setIncomingCallUserId(null);
+    }
   };
 
   const startGroupCall = () => {
@@ -447,15 +468,199 @@ export function WorkspaceRoom({
   };
 
   return (
-    <div className="workspace-container" style={{ 
-      position: "fixed", 
-      top: 0, 
-      left: 0, 
-      width: "100vw", 
-      height: "100vh",
-      overflow: "hidden"
-    }}>
-      <PhaserGame socket={activeSocket} />
+    <div className="workspace-view">
+      
+      {/* Sidebar Overlay */}
+      <aside className="workspace-sidebar">
+        <div className="sidebar-header">
+          <div className="sidebar-icon">
+            {workspace.name.substring(0, 1).toUpperCase()}
+          </div>
+          <div className="sidebar-title">
+            <h2>{workspace.name}</h2>
+            <p><span className="status-dot"></span> {onlineUserIds.length + 1} {onlineUserIds.length + 1 === 1 ? 'person' : 'people'} online</p>
+          </div>
+        </div>
+
+        <div className="sidebar-nav">
+          <nav className="nav-menu">
+            <div className="nav-section-title">Navigation</div>
+            <a href="#" className="nav-item active">
+              <div className="nav-item-content">
+                <div className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                </div>
+                <span>Presence</span>
+              </div>
+            </a>
+            
+            <a href="#" className="nav-item">
+              <div className="nav-item-content">
+                <div className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                </div>
+                <span>Action Items</span>
+              </div>
+              <span className="nav-badge">4</span>
+            </a>
+
+            <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); setIsLibraryOpen(true); }}>
+              <div className="nav-item-content">
+                <div className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                </div>
+                <span>Files</span>
+              </div>
+            </a>
+
+            <a href="#" className="nav-item">
+              <div className="nav-item-content">
+                <div className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                </div>
+                <span>Chat</span>
+              </div>
+            </a>
+
+            <a href="#" className="nav-item">
+              <div className="nav-item-content">
+                <div className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                </div>
+                <span>Memory</span>
+              </div>
+            </a>
+          </nav>
+        </div>
+
+        {/* Group Call Actions (Only in Meeting Zone) */}
+        {_isMeetingZone && (
+          <div className="sidebar-group-call" style={{ padding: '0 var(--space-6) var(--space-4) var(--space-6)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <button 
+              className="btn-primary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: _groupCallActive ? 0.5 : 1, cursor: _groupCallActive ? 'not-allowed' : 'pointer' }}
+              onClick={startGroupCall}
+              disabled={_groupCallActive}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+              Start Meeting
+            </button>
+            
+            <button 
+              className="btn-primary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: 'var(--color-secondary-dark)', opacity: (!_groupCallActive || amInGroupCall) ? 0.5 : 1, cursor: (!_groupCallActive || amInGroupCall) ? 'not-allowed' : 'pointer' }}
+              onClick={joinGroupCall}
+              disabled={!_groupCallActive || amInGroupCall}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+              Join Meeting
+            </button>
+          </div>
+        )}
+
+        {onlineUserIds.length > 0 && (
+          <div className="sidebar-online">
+            <div className="nav-section-title">Online Now</div>
+            <div className="online-list">
+               {onlineUserIds.map(wsId => {
+                 const lastUnderscore = wsId.lastIndexOf('_');
+                 const baseId = lastUnderscore > 0 ? wsId.substring(0, lastUnderscore) : wsId;
+                 const member = selectedMembers.find(m => m.user.id === baseId);
+                 const name = member?.user.name || member?.user.email || 'Unknown User';
+                 const avatarUrl = member?.user.avatarUrl || `https://i.pravatar.cc/100?u=${baseId}`;
+                 
+                 return (
+                   <div className="online-user" key={wsId}>
+                     <div className="online-avatar">
+                       <img src={avatarUrl} alt={name} />
+                       <span className="status-dot"></span>
+                     </div>
+                     <div className="online-user-info">
+                       <p>{name}</p>
+                       <span>In Workspace</span>
+                     </div>
+                   </div>
+                 );
+               })}
+            </div>
+          </div>
+        )}
+
+        <div className="sidebar-footer">
+          <div className="current-user">
+            <img src="https://i.pravatar.cc/100?img=60" alt="Current User" />
+            <div className="current-user-info">
+              <p>Current User</p>
+              <span>{displayName}</span>
+            </div>
+          </div>
+          <button className="settings-btn" onClick={onBack}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
+        </div>
+      </aside>
+
+      <div className="workspace-game-container">
+        <PhaserGame socket={activeSocket} />
+
+        {/* Bottom Calling Bar Overlay */}
+        <div className="call-controls-container">
+          <div className="call-controls-bar">
+            {zoneMessage ? (
+              <div className="zone-indicator">
+                <span className="status-dot"></span> {zoneMessage.replace('Zone: ', '')}
+              </div>
+            ) : (
+              <div className="zone-indicator" style={{ backgroundColor: 'var(--color-tertiary-dark)', color: 'var(--color-text-muted)' }}>
+                <span className="status-dot" style={{ backgroundColor: 'var(--color-text-light)' }}></span> NOT IN ZONE
+              </div>
+            )}
+            
+            <div className="control-buttons">
+              <button 
+                className="control-btn" 
+                onClick={toggleMute}
+              >
+                <div className="disabled-icon-wrapper">
+                  {isMuted ? (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                  ) : (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                  )}
+                </div>
+                <span>MUTE</span>
+              </button>
+
+              <button className="control-btn disabled">
+                <div className="disabled-icon-wrapper">
+                  <span className="red-cross">×</span>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                </div>
+                <span>VIDEO</span>
+              </button>
+
+              <button className="control-btn disabled">
+                <div className="disabled-icon-wrapper">
+                  <span className="red-cross">×</span>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                </div>
+                <span>SCREEN</span>
+              </button>
+
+              <button 
+                className={`btn-end-call ${(!activeCallUserId && !amInGroupCall) ? 'inactive' : ''}`}
+                onClick={() => {
+                  if (activeCallUserId) endCall();
+                  if (amInGroupCall) leaveGroupCall();
+                }}
+                disabled={!activeCallUserId && !amInGroupCall}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"></path><line x1="23" y1="1" x2="1" y2="23"></line></svg>
+                END
+              </button>
+            </div>
+          </div>
+        </div>
 
       <MeetingSummaryModal 
         isOpen={isSummaryModalOpen} 
@@ -487,545 +692,143 @@ export function WorkspaceRoom({
         }}
       />
       
-      <div className="workspace-ui" style={{ 
-        position: "absolute", 
-        top: 0, 
-        left: 0, 
-        width: "100%", 
-        height: "100%", 
-        zIndex: 1, 
-        padding: "20px",
-        pointerEvents: "none", // Allow clicks to pass through to Phaser by default
-        display: "flex",
-        flexDirection: "column",
-        gap: "20px"
-      }}>
-        {/* Interaction Label */}
-        {isNearLibrary && !isLibraryOpen && (
-          <div style={{
-            position: 'absolute',
-            left: '50%',
-            bottom: '100px',
-            transform: 'translateX(-50%)',
-            background: 'rgba(0, 0, 0, 0.8)',
-            color: 'white',
-            padding: '10px 20px',
-            borderRadius: '12px',
-            fontWeight: 'bold',
-            fontSize: '1.2rem',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            animation: 'pulse 1.5s infinite',
-            zIndex: 100,
-            pointerEvents: 'none'
-          }}>
-            📖 Press <span style={{ color: '#6366f1', background: 'white', padding: '2px 8px', borderRadius: '4px', margin: '0 4px' }}>E</span> to View Archive
+      {/* Call UI Overlays */}
+      {_selectedPlayerId && (
+        <div className="call-popup-overlay" style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'var(--color-surface)', padding: '16px', borderRadius: '8px', boxShadow: 'var(--shadow-lg)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <p style={{ margin: 0, fontWeight: 600 }}>Call {
+            selectedMembers.find(m => m.user.id === (_selectedPlayerId.includes('_') ? _selectedPlayerId.substring(0, _selectedPlayerId.lastIndexOf('_')) : _selectedPlayerId))?.user.name || 'User'
+          }?</p>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn-primary" onClick={initiateCall}>Call</button>
+            <button className="btn-secondary" onClick={() => setSelectedPlayerId(null)}>Cancel</button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Top Header UI */}
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "center",
-          pointerEvents: "auto" // Re-enable clicks for UI elements
-        }}>
-          <button 
-            onClick={onBack}
-            style={{
-              padding: "10px 20px",
-              background: "rgba(255, 255, 255, 0.9)",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "600",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-            }}
-          >
-            &larr; Back to Dashboard
-          </button>
+      {_incomingCallUserId && (
+        <div className="call-popup-overlay incoming" style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'var(--color-primary)', color: 'white', padding: '16px', borderRadius: '8px', boxShadow: 'var(--shadow-lg)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <p style={{ margin: 0, fontWeight: 600 }}>Incoming call from {
+            selectedMembers.find(m => m.user.id === (_incomingCallUserId.includes('_') ? _incomingCallUserId.substring(0, _incomingCallUserId.lastIndexOf('_')) : _incomingCallUserId))?.user.name || 'User'
+          }</p>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn-primary" style={{ backgroundColor: 'white', color: 'var(--color-primary)' }} onClick={acceptCall}>Accept</button>
+            <button className="btn-secondary" style={{ backgroundColor: 'transparent', borderColor: 'white', color: 'white' }} onClick={declineCall}>Decline</button>
+          </div>
+        </div>
+      )}
+
+      {_callStatus && !_incomingCallUserId && !_selectedPlayerId && (
+        <div className="call-status-toast" style={{ position: 'absolute', top: '20px', right: '20px', background: 'var(--color-surface)', padding: '12px 16px', borderRadius: '8px', boxShadow: 'var(--shadow-md)', zIndex: 1000, fontWeight: 600 }}>
+          {_callStatus}
+        </div>
+      )}
+
+      {_notification && (
+        <div className="notification-toast" style={{ position: 'absolute', top: '80px', right: '20px', background: 'var(--color-secondary-dark)', color: 'white', padding: '12px 16px', borderRadius: '8px', boxShadow: 'var(--shadow-md)', zIndex: 1000, fontWeight: 600 }}>
+          {_notification}
+        </div>
+      )}
+
+      {/* Right Sidebar - Call Overlay */}
+      {((_groupCallActive && amInGroupCall) || activeCallUserId) && (
+        <div className="call-right-sidebar">
+          <div className="meeting-area-header">
+            <span className="live-indicator"><span className="live-dot"></span> LIVE</span>
+            <h2>{amInGroupCall ? "Meeting Area" : "1-on-1 Call"}</h2>
+          </div>
           
-          <div style={{ display: "flex", gap: "10px" }}>
-            <div style={{ 
-              background: "rgba(255, 255, 255, 0.9)", 
-              padding: "8px 16px", 
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px"
-            }}>
-              <strong>Status:</strong>{" "}
-              <span style={{
-                color: connectionStatus === "connected" ? "#10b981" :
-                  connectionStatus === "connecting" ? "#f59e0b" : "#ef4444",
-                fontWeight: "bold"
-              }}>
-                {connectionStatus.toUpperCase()}
-              </span>
+          <div className="elapsed-time-box">
+             <div className="time">{formatElapsed(elapsedSeconds)}</div>
+             <div className="time-label">ELAPSED TIME</div>
+          </div>
+
+          <div className="in-call-section">
+            <div className="in-call-header">
+              IN THE CALL — {amInGroupCall ? (_groupCallParticipants.length > 0 ? _groupCallParticipants.length : 2) : 2}
             </div>
             
-            <button 
-              onClick={handleShare} 
-              style={{ 
-                padding: "8px 16px",
-                background: "rgba(255, 255, 255, 0.9)",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                display: "flex", 
-                gap: "8px", 
-                alignItems: "center",
-                fontWeight: "600",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-              }}
-            >
-              {copied ? "Copied Link!" : "Share Link \u279a"}
-            </button>
-          </div>
-        </div>
+            <div className="participant-list">
+               {/* Current User */}
+               <div className="call-participant-item active-speaker">
+                 <div className="cp-avatar-wrap">
+                   <img src="https://i.pravatar.cc/100?img=60" className="cp-avatar" alt="Current User" />
+                   <div className="cp-status-dot red-mute"></div>
+                 </div>
+                 <div className="cp-info">
+                   <p className="cp-name">{displayName}</p>
+                   <p className="cp-subtext">{isMuted ? "Muted" : "Speaking..."}</p>
+                 </div>
+               </div>
 
-        {/* Workspace Info Card */}
-        <div style={{ 
-          pointerEvents: "auto",
-          background: "rgba(255, 255, 255, 0.85)", 
-          padding: "20px", 
-          borderRadius: "12px", 
-          backdropFilter: "blur(4px)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-          maxWidth: "400px"
-        }}>
-          <h2 style={{ margin: "0 0 10px 0", color: "#1f2937" }}>{workspace.name}</h2>
-          <div style={{ fontSize: "0.9em", color: "#4b5563" }}>
-            <p style={{ margin: "4px 0" }}><strong>User:</strong> {displayName}</p>
-            <p style={{ margin: "4px 0" }}><strong>Owner:</strong> {ownerName || "Loading..."}</p>
-          </div>
-        </div>
+               {/* Other Participants */}
+               {activeCallUserId && !amInGroupCall && (
+                 (() => {
+                   const callUserBaseId = activeCallUserId.includes('_') ? activeCallUserId.substring(0, activeCallUserId.lastIndexOf('_')) : activeCallUserId;
+                   const member = selectedMembers.find(m => m.user.id === callUserBaseId);
+                   const name = member?.user.name || member?.user.email || 'User';
+                   const avatarUrl = member?.user.avatarUrl || `https://i.pravatar.cc/100?u=${callUserBaseId}`;
+                   
+                   return (
+                     <div className="call-participant-item" key={activeCallUserId}>
+                       <div className="cp-avatar-wrap">
+                         <img src={avatarUrl} className="cp-avatar" alt={name} />
+                         <div className="cp-status-dot green"></div>
+                       </div>
+                       <div className="cp-info">
+                         <p className="cp-name">{name}</p>
+                         <p className="cp-subtext">Joined recently</p>
+                       </div>
+                     </div>
+                   );
+                 })()
+               )}
 
-        {/* Player Action Dialog - Appears on Right when a player is clicked */}
-        {selectedPlayerId && (
-          <div style={{
-            position: "absolute",
-            right: "20px",
-            top: "100px",
-            width: "250px",
-            background: "white",
-            padding: "20px",
-            borderRadius: "12px",
-            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
-            pointerEvents: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: "15px",
-            animation: "slideIn 0.3s ease-out"
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: "1.1em" }}>Player Selected</h3>
-              <button 
-                onClick={() => setSelectedPlayerId(null)}
-                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.2em" }}
-              >
-                &times;
-              </button>
+               {amInGroupCall && _groupCallParticipants.map(participantId => {
+                 const baseId = participantId.includes('_') ? participantId.substring(0, participantId.lastIndexOf('_')) : participantId;
+                 const member = selectedMembers.find(m => m.user.id === baseId);
+                 const name = member?.user.name || member?.user.email || 'User';
+                 const avatarUrl = member?.user.avatarUrl || `https://i.pravatar.cc/100?u=${baseId}`;
+
+                 return (
+                   <div className="call-participant-item" key={participantId}>
+                     <div className="cp-avatar-wrap">
+                       <img src={avatarUrl} className="cp-avatar" alt={name} />
+                       <div className="cp-status-dot green"></div>
+                     </div>
+                     <div className="cp-info">
+                       <p className="cp-name">{name}</p>
+                       <p className="cp-subtext">Joined recently</p>
+                     </div>
+                   </div>
+                 );
+               })}
             </div>
-            <p style={{ margin: 0, fontSize: "0.9em", color: "#666" }}>
-              ID: {selectedPlayerId.substring(0, 15)}...
-            </p>
-            <button
-              onClick={initiateCall}
-              style={{
-                padding: "12px",
-                background: "#10b981",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "600",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px"
-              }}
-            >
-              <span style={{ fontSize: "1.2em" }}>📞</span> Call Player
-            </button>
           </div>
-        )}
-
-        {/* Call Status Indicator */}
-        {callStatus && (
-          <div style={{
-            position: "absolute",
-            left: "50%",
-            top: "10px",
-            transform: "translateX(-50%)",
-            background: callStatus === "Connected!" ? "#10b981" : "#f59e0b",
-            color: "white",
-            padding: "8px 16px",
-            borderRadius: "20px",
-            fontWeight: "bold",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            zIndex: 100,
-            animation: "fadeIn 0.3s ease-out"
-          }}>
-            {callStatus}
-          </div>
-        )}
-
-        {activeCallUserId && (
-          <div
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "52px",
-              transform: "translateX(-50%)",
-              zIndex: 101,
-              pointerEvents: "auto",
-            }}
-          >
-            <button
-              onClick={endCall}
-              style={{
-                padding: "8px 14px",
-                background: "#ef4444",
-                color: "white",
-                border: "none",
-                borderRadius: "999px",
-                cursor: "pointer",
-                fontWeight: 700,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-              }}
-            >
-              End Call
-            </button>
-          </div>
-        )}
-
-        {/* Notification Toast */}
-        {notification && (
-          <div style={{
-            position: "absolute",
-            top: "80px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#3b82f6",
-            color: "white",
-            padding: "10px 20px",
-            borderRadius: "20px",
-            fontWeight: "bold",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            zIndex: 100,
-            animation: "slideDown 0.3s ease-out"
-          }}>
-            {notification}
-          </div>
-        )}
-
-        {/* Group Call Controls */}
-        <div style={{
-          position: "absolute",
-          top: "100px",
-          left: "20px",
-          pointerEvents: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px"
-        }}>
-          <button
-            onClick={startGroupCall}
-            disabled={!isMeetingZone || groupCallActive || amInGroupCall}
-            style={{
-              padding: "10px 20px",
-              background: (!isMeetingZone || groupCallActive || amInGroupCall) ? "#d1d5db" : "#10b981",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: (!isMeetingZone || groupCallActive || amInGroupCall) ? "not-allowed" : "pointer",
-              fontWeight: "600",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              transition: "calc(0.2s)"
-            }}
-          >
-            Start Group Call
-          </button>
-
-          <button
-            onClick={joinGroupCall}
-            disabled={!isMeetingZone || !groupCallActive || amInGroupCall}
-            style={{
-              padding: "10px 20px",
-              background: (!isMeetingZone || !groupCallActive || amInGroupCall) ? "#d1d5db" : "#3b82f6",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: (!isMeetingZone || !groupCallActive || amInGroupCall) ? "not-allowed" : "pointer",
-              fontWeight: "600",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              transition: "calc(0.2s)"
-            }}
-          >
-            Join Group Call
-          </button>
-        </div>
-
-        {/* Group Call Overlay (Zoom-like Screen) */}
-        {amInGroupCall && (
-          <div style={{
-            position: "absolute",
-            bottom: "20px",
-            right: "20px",
-            width: "350px",
-            background: "rgba(31, 41, 55, 0.95)",
-            backdropFilter: "blur(10px)",
-            borderRadius: "16px",
-            padding: "20px",
-            boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
-            pointerEvents: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: "15px",
-            animation: "slideIn 0.3s ease-out"
-          }}>
-            <h3 style={{ margin: 0, color: "white", textAlign: "center" }}>Group Call ({groupCallParticipants.length})</h3>
-            
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: "10px",
-              maxHeight: "300px",
-              overflowY: "auto"
-            }}>
-              {/* Render local user */}
-              <div style={{
-                background: "#374151",
-                borderRadius: "12px",
-                aspectRatio: "1",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-                border: "2px solid #10b981"
-              }}>
-                <span style={{ color: "white", fontSize: "2em", fontWeight: "bold" }}>YOU</span>
-                {isMuted && (
-                  <span style={{ position: "absolute", bottom: "5px", right: "5px", fontSize: "1.2em" }}>🔇</span>
-                )}
-              </div>
-
-              {/* Render remote participants */}
-              {groupCallParticipants.filter(id => id !== "pending").map((userId, i) => (
-                <div key={i} style={{
-                  background: "#4b5563",
-                  borderRadius: "12px",
-                  aspectRatio: "1",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative"
+          
+          <div className="call-actions-bottom">
+            <button className="btn-sidebar-leave" onClick={() => {
+                  if (activeCallUserId) endCall();
+                  if (amInGroupCall) leaveGroupCall();
                 }}>
-                  <span style={{ color: "white", fontSize: "2em", fontWeight: "bold" }}>
-                    {userId.substring(0, 2).toUpperCase()}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "10px" }}>
-              <button
-                onClick={toggleMute}
-                style={{
-                  padding: "10px 20px",
-                  background: isMuted ? "#ef4444" : "#4b5563",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  flex: 1
-                }}
-              >
-                {isMuted ? "Unmute" : "Mute"}
-              </button>
-              
-              <button
-                onClick={leaveGroupCall}
-                style={{
-                  padding: "10px 20px",
-                  background: "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  flex: 1
-                }}
-              >
-                Hang up
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Incoming Call Dialog - Appears on Top Center */}
-
-        {incomingCallUserId && (
-          <div style={{
-            position: "absolute",
-            left: "50%",
-            top: "50px",
-            transform: "translateX(-50%)",
-            width: "300px",
-            background: "white",
-            padding: "20px",
-            borderRadius: "12px",
-            boxShadow: "0 10px 35px rgba(0,0,0,0.3)",
-            pointerEvents: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: "15px",
-            animation: "slideDown 0.4s ease-out",
-            zIndex: 100
-          }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-              <h3 style={{ margin: 0, fontSize: "1.2em", color: "#1f2937" }}>Incoming Call 📞</h3>
-              <p style={{ margin: "5px 0", fontSize: "0.9em", color: "#666" }}>
-                Player: {incomingCallUserId.substring(0, 15)}...
-              </p>
-            </div>
-            
-            <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "10px" }}>
-              <button
-                onClick={acceptCall}
-                style={{
-                  padding: "10px 15px",
-                  background: "#10b981",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  flex: 1
-                }}
-              >
-                Accept
-              </button>
-              <button
-                onClick={declineCall}
-                style={{
-                  padding: "10px 15px",
-                  background: "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  flex: 1
-                }}
-              >
-                Decline
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Zone Message - Bottom center */}
-        {zoneMessage && (
-          <div style={{
-            position: "absolute",
-            bottom: "30px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(0, 0, 0, 0.7)",
-            color: "white",
-            padding: "10px 20px",
-            borderRadius: "20px",
-            fontWeight: "bold",
-            pointerEvents: "none",
-            animation: "fadeIn 0.3s ease-in-out",
-            zIndex: 100,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center"
-          }}>
-            <div style={{ fontSize: "1.1em" }}>{zoneMessage}</div>
-            <div style={{ fontSize: "0.8em", marginTop: "4px", color: "#10b981", display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ 
-                width: "8px", 
-                height: "8px", 
-                background: "#10b981", 
-                borderRadius: "50%",
-                display: "inline-block"
-              }}></span>
-              {zonePlayerCount} {zonePlayerCount === 1 ? "person" : "people"} in call
-            </div>
-          </div>
-        )}
-
-        {/* Chat - Floating at bottom left */}
-
-        <div style={{ 
-          marginTop: "auto",
-          pointerEvents: "auto",
-          background: "rgba(255, 255, 255, 0.85)", 
-          padding: "16px", 
-          borderRadius: "12px", 
-          backdropFilter: "blur(4px)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-          width: "350px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px"
-        }}>
-          <h3 style={{ margin: 0, fontSize: "1.1em" }}>Chat</h3>
-          <div className="messages" style={{ 
-            height: "150px", 
-            overflowY: "auto", 
-            background: "rgba(0,0,0,0.03)", 
-            padding: "10px",
-            borderRadius: "8px",
-            fontSize: "0.9em"
-          }}>
-            {messages.length === 0 && <p style={{ color: "#999" }}>No messages yet...</p>}
-            {messages.map((msg, index) => (
-              <div key={index} style={{ marginBottom: "4px" }}>
-                <p style={{ margin: 0 }}>{msg}</p>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder="Type a message..."
-              style={{ 
-                flex: 1, 
-                padding: "8px 12px", 
-                borderRadius: "6px", 
-                border: "1px solid #ddd",
-                outline: "none"
-              }}
-            />
-            <button 
-              onClick={sendMessage} 
-              disabled={connectionStatus !== "connected"}
-              style={{
-                padding: "8px 16px",
-                background: "#3b82f6",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                opacity: connectionStatus !== "connected" ? 0.5 : 1
-              }}
-            >
-              Send
+               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '8px'}}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+               Leave Call
+            </button>
+            <button className="btn-sidebar-end-all" onClick={() => {
+                  if (activeCallUserId) endCall();
+                  if (amInGroupCall) leaveGroupCall();
+                }}>
+               <div className="end-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"></path><line x1="23" y1="1" x2="1" y2="23"></line></svg>
+                  End Meeting for All
+               </div>
+               <span className="end-desc">Ending the meeting will generate an AI summary</span>
             </button>
           </div>
         </div>
+      )}
+
+      {/* End of workspace-game-container */}
       </div>
     </div>
   );
-
 }

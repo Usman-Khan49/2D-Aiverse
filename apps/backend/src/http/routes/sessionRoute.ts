@@ -31,6 +31,7 @@ sessionRoute.get("/:sessionId/summary", async (req, res) => {
         // 1. Fetch the summary
         const summary = await db.summary.findUnique({
             where: { sessionId },
+            include: { session: true }
         });
 
         if (!summary) {
@@ -47,7 +48,8 @@ sessionRoute.get("/:sessionId/summary", async (req, res) => {
         // Flatten the 'raw' AI data into the summary object for the frontend
         const formattedSummary = {
             ...summary,
-            ...(typeof summary.raw === 'object' ? (summary.raw as any) : {})
+            ...(typeof summary.raw === 'object' ? (summary.raw as any) : {}),
+            startedAt: summary.session?.startedAt
         };
 
         return res.json({

@@ -22,7 +22,7 @@ export type WorkspaceMember = {
   };
 };
 
-export type View = "landing" | "dashboard" | "workspace";
+export type View = "landing" | "dashboard" | "workspace" | "create-workspace";
 
 interface DashboardState {
   // Navigation
@@ -34,18 +34,22 @@ interface DashboardState {
   setWorkspaces: (workspaces: Workspace[]) => void;
   selectedWorkspace: Workspace | null;
   setSelectedWorkspace: (workspace: Workspace | null) => void;
+  createdWorkspace: Workspace | null;
+  setCreatedWorkspace: (workspace: Workspace | null) => void;
   selectedMembers: WorkspaceMember[];
   setSelectedMembers: (members: WorkspaceMember[]) => void;
 
   // Dialog & UI State
   showJoinDialog: boolean;
   setShowJoinDialog: (show: boolean) => void;
-  showCreateDialog: boolean;
-  setShowCreateDialog: (show: boolean) => void;
+  createStep: number;
+  setCreateStep: (step: number) => void;
   joinInput: string;
   setJoinInput: (input: string) => void;
   createName: string;
   setCreateName: (name: string) => void;
+  createSlug: string;
+  setCreateSlug: (slug: string) => void;
 
   // Loading & Feedback
   loadingWorkspaces: boolean;
@@ -65,7 +69,7 @@ interface DashboardState {
 
 export const useDashboardStore = create<DashboardState>((set) => ({
   // Navigation
-  view: "landing",
+  view: "dashboard",
   setView: (view) => set({ view }),
 
   // Workspace Data
@@ -73,18 +77,22 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setWorkspaces: (workspaces) => set({ workspaces }),
   selectedWorkspace: null,
   setSelectedWorkspace: (selectedWorkspace) => set({ selectedWorkspace }),
+  createdWorkspace: null,
+  setCreatedWorkspace: (createdWorkspace) => set({ createdWorkspace }),
   selectedMembers: [],
   setSelectedMembers: (selectedMembers) => set({ selectedMembers }),
 
   // Dialog & UI State
   showJoinDialog: false,
   setShowJoinDialog: (showJoinDialog) => set({ showJoinDialog }),
-  showCreateDialog: false,
-  setShowCreateDialog: (showCreateDialog) => set({ showCreateDialog }),
+  createStep: 1,
+  setCreateStep: (createStep) => set({ createStep }),
   joinInput: "",
   setJoinInput: (joinInput) => set({ joinInput }),
   createName: "",
   setCreateName: (createName) => set({ createName }),
+  createSlug: "",
+  setCreateSlug: (createSlug) => set({ createSlug }),
 
   // Loading & Feedback
   loadingWorkspaces: false,
