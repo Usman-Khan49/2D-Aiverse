@@ -6,7 +6,7 @@
 
 ### AI-Native Virtual Office for Remote Teams
 
-Turn every meeting into captured decisions, assigned action items, and searchable team memory — all inside a shared 2D workspace your team actually lives in.
+Turn every meeting into captured decisions, assigned action items, and searchable team memory inside a shared 2D workspace your team actually lives in.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-roommind.app-C4714A?style=for-the-badge&logoColor=white)](https://roommind.vercel.app)
 [![License](https://img.shields.io/badge/License-MIT-6B8F6B?style=for-the-badge)](./LICENSE)
@@ -15,7 +15,6 @@ Turn every meeting into captured decisions, assigned action items, and searchabl
 
 <br />
 
-<!-- MAIN SCREENSHOT — see screenshot guide below -->
 <img src="./docs/screenshots/canvas-overview.png" alt="RoomMind Office Canvas" width="100%" style="border-radius: 12px;" />
 
 </div>
@@ -24,17 +23,15 @@ Turn every meeting into captured decisions, assigned action items, and searchabl
 
 ## What is RoomMind?
 
-Most virtual office tools solve **presence**, not **progress**. Your team can appear online together, but decisions get lost, action items go unassigned, and the next person to join has no idea what was discussed.
+Most virtual office tools solve presence, not progress. Your team can appear online together, but decisions get lost, action items go unassigned, and the next person to join has no idea what was discussed.
 
-RoomMind combines a **spatial 2D office canvas** with an **AI memory layer** that listens to every meeting, structures the outcomes, and makes them retrievable — in plain English — weeks later.
+RoomMind combines a spatial 2D office canvas with an AI memory layer that listens to every meeting, structures the outcomes, and makes them retrievable in plain English weeks later.
 
 ---
 
 ## Screenshots
 
 <div align="center">
-
-<!-- See screenshot guide at bottom of this file for capture instructions -->
 
 | Office Canvas | Active Meeting Call |
 |:---:|:---:|
@@ -50,33 +47,35 @@ RoomMind combines a **spatial 2D office canvas** with an **AI memory layer** tha
 
 ## Features
 
-### 🗺️ Spatial 2D Office Canvas
-- Shared top-down office with four named zones — **Meeting**, **Working**, **Knowledge**, and **Resting**
-- Move your avatar freely between areas in real time
-- See teammates as live avatar dots with name tags and presence indicators
-- Real-time presence powered by WebSockets and Redis pub/sub
+### Spatial 2D Office Canvas
 
-### 🎙️ AI Meeting Pipeline
-- Join a call inside the Meeting Area — audio is captured and transcribed via **Deepgram** with automatic speaker diarization
-- Meeting audio is chunked every **5 minutes**, summarized by **Gemini 1.5 Pro**, and stored temporarily in Redis
-- When the meeting ends, all chunk summaries are synthesized into a **final structured summary** containing decisions, open questions, risks, and action items
-- Processing is fully asynchronous — a Python/Celery worker handles all AI jobs so the real-time server is never blocked
+<img src="./docs/gifs/canvas-presence.gif" alt="Canvas Presence" width="100%" />
 
-### 📋 Structured Meeting Summaries
-- Every ended session produces a clean summary modal with tabbed views: **Summary**, **Transcript**, and **Action Items**
-- Participant list shows everyone who was in the call alongside the speaker-labeled transcript
-- Action items are extracted automatically with priority levels and can be assigned to workspace members
+A shared top-down office with four named zones: Meeting, Working, Knowledge, and Resting. Move your avatar freely between areas in real time and see teammates as live avatar dots with name tags and presence indicators. Real-time presence is powered by WebSockets and Redis pub/sub, broadcasting avatar positions and zone changes to all connected clients with zero event-loop blocking on the main server process.
 
-### 🧠 Memory Q&A (RAG)
-- Ask natural language questions about any past meeting in your workspace
-- Powered by **pgvector** similarity search and **Gemini embeddings** — answers are grounded in your actual meeting content
-- Source cards link back to the original session with similarity scores
-- Toggle between workspace-wide search and session-scoped search
+---
 
-### 👥 Workspace & Access Control
-- Create a workspace and invite teammates with role-based access (Owner, Admin, Member)
-- Workspace membership synced via **Clerk** webhooks on every sign-up and update
-- Action items dashboard shows all open tasks across every meeting in the workspace
+### AI Meeting Pipeline
+
+<img src="./docs/gifs/meeting-call.gif" alt="Meeting Call" width="100%" />
+
+Join a call inside the Meeting Area. Audio is captured via the browser MediaRecorder API in WebM/Opus format and transcribed with automatic speaker diarization via Deepgram. The transcription is chunked into rolling 5-minute segments and sent to Gemini 1.5 Pro for interim summarization, with chunk summaries stored temporarily in Redis. When the meeting ends, all chunk summaries are synthesized into a single structured final summary containing decisions, open questions, risks, and action items. The entire pipeline runs asynchronously through a Python/Celery worker over a BullMQ Redis queue so the WebSocket server is never blocked.
+
+---
+
+### Structured Meeting Summaries
+
+<img src="./docs/gifs/meeting-summary.gif" alt="Meeting Summary" width="100%" />
+
+Every ended session produces a summary modal with three tabs: Summary, Transcript, and Action Items. The Summary tab surfaces decisions, open questions, and risks extracted by Gemini. The Transcript tab shows the full speaker-labeled conversation alongside the participant list so teammates can visually map speakers to names. Action items are extracted automatically with AI-assigned priority levels and can be assigned to any workspace member directly from the modal.
+
+---
+
+### Memory Q&A
+
+<img src="./docs/gifs/memory-qa.gif" alt="Memory Q&A" width="100%" />
+
+Ask natural language questions about any past meeting in your workspace. After every session ends, the final summary and full transcript are chunked, embedded via Gemini embedding models, and stored in PostgreSQL using pgvector. At query time, the question is embedded and a cosine similarity search retrieves the most relevant passages. Those passages are passed to Gemini 1.5 Pro as context and it generates a grounded answer with source cards linking back to the original session. Search scope can be toggled between the full workspace history and a single session.
 
 ---
 
@@ -89,7 +88,7 @@ RoomMind combines a **spatial 2D office canvas** with an **AI memory layer** tha
 | [pnpm Workspaces](https://pnpm.io/workspaces) | Package management across apps |
 | TypeScript | Shared types across all apps via `@roommind/types` |
 
-### Frontend — `apps/web`
+### Frontend
 | Technology | Purpose |
 |---|---|
 | [React 19](https://react.dev/) | UI shell and product overlays |
@@ -98,17 +97,17 @@ RoomMind combines a **spatial 2D office canvas** with an **AI memory layer** tha
 | [Vite](https://vitejs.dev/) | Build tooling and dev server |
 | [Clerk](https://clerk.com/) | Authentication and session management |
 
-### Backend — `apps/backend`
+### Backend
 | Technology | Purpose |
 |---|---|
 | [Node.js + Express](https://expressjs.com/) | HTTP API server |
 | [ws](https://github.com/websockets/ws) | WebSocket server for real-time presence |
 | [Prisma](https://www.prisma.io/) | ORM and database migrations |
-| [PostgreSQL + pgvector](https://github.com/pgvector/pgvector) | Relational data + vector similarity search |
+| [PostgreSQL + pgvector](https://github.com/pgvector/pgvector) | Relational data and vector similarity search |
 | [Redis](https://redis.io/) | Pub/sub, presence state, temporary chunk storage |
 | [Clerk Express SDK](https://clerk.com/docs/references/nodejs/overview) | JWT verification middleware |
 
-### AI Worker — `apps/worker`
+### AI Worker
 | Technology | Purpose |
 |---|---|
 | [Python 3.11](https://python.org) | Worker runtime |
@@ -120,8 +119,6 @@ RoomMind combines a **spatial 2D office canvas** with an **AI memory layer** tha
 ### Infrastructure
 | Service | Purpose |
 |---|---|
-| [Vercel](https://vercel.com/) | Frontend deployment |
-| [Railway](https://railway.app/) | Backend and worker deployment |
 | [Neon](https://neon.tech/) | Serverless PostgreSQL |
 | [Redis Cloud](https://redis.com/redis-enterprise-cloud/) | Managed Redis |
 
@@ -130,56 +127,22 @@ RoomMind combines a **spatial 2D office canvas** with an **AI memory layer** tha
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Browser (Vercel)                        │
-│         React UI overlay + Phaser.js 2D Canvas              │
-└───────────────────────┬─────────────────────────────────────┘
-                        │  HTTPS + WSS
-          ┌─────────────▼─────────────┐
-          │     Backend (Railway)     │
-          │  Express HTTP + WS Server │
-          └──────┬──────────┬─────────┘
-                 │          │
-        ┌────────▼──┐  ┌────▼────────────┐
-        │   Neon    │  │   Redis Cloud   │
-        │ Postgres  │  │ pub/sub · queue │
-        │ pgvector  │  │ chunk cache     │
-        └───────────┘  └────┬────────────┘
-                            │  BullMQ Jobs
-          ┌─────────────────▼─────────────┐
-          │      AI Worker (Railway)      │
-          │  Python · Celery · Deepgram   │
-          │  Gemini 1.5 Pro · Embeddings  │
-          └───────────────────────────────┘
-```
-
----
-
-## Project Structure
-
-```
-roommind/
-├── apps/
-│   ├── web/                    # React + Phaser frontend
-│   │   └── src/
-│   │       ├── game/           # Phaser scenes, entities, systems
-│   │       ├── ui/             # React components, hooks, store
-│   │       └── ws/             # WebSocket client
-│   ├── backend/                # Node.js HTTP + WebSocket server
-│   │   └── src/
-│   │       ├── db/             # Prisma client, migrations, repos
-│   │       ├── http/           # Express routes, middleware
-│   │       ├── ws/             # WS server, connection manager
-│   │       └── services/       # Business logic
-│   └── worker/                 # Python AI job processor
-│       └── src/
-│           ├── jobs/           # transcribe, summarize, embed
-│           ├── services/       # Gemini, Deepgram, notify
-│           └── queue/          # Celery worker bootstrap
-└── packages/
-    ├── types/                  # Shared TypeScript types
-    ├── utils/                  # Shared utilities
-    └── config/                 # Shared tsconfig + eslint
+Browser (Vercel)
+React UI + Phaser.js 2D Canvas
+          |
+          | HTTPS + WSS
+          |
+    Backend (Railway)
+    Express HTTP + WebSocket Server
+          |               |
+       Neon            Redis Cloud
+     Postgres          pub/sub
+     pgvector          queue
+                       chunk cache
+                          |
+                    AI Worker (Railway)
+                    Python + Celery
+                    Deepgram + Gemini
 ```
 
 ---
@@ -190,17 +153,16 @@ roommind/
 
 ```bash
 node --version    # 18+
-pnpm --version    # 8+  →  npm install -g pnpm
+pnpm --version    # 8+  ->  npm install -g pnpm
 python --version  # 3.11+
-git --version
 ```
 
 You will also need accounts for:
-- [Clerk](https://clerk.com) — authentication
-- [Neon](https://neon.tech) — PostgreSQL database
-- [Redis Cloud](https://redis.com) — Redis instance
-- [Deepgram](https://deepgram.com) — transcription API
-- [Google AI Studio](https://aistudio.google.com) — Gemini API key
+- [Clerk](https://clerk.com) for authentication
+- [Neon](https://neon.tech) for PostgreSQL
+- [Redis Cloud](https://redis.com) for Redis
+- [Deepgram](https://deepgram.com) for transcription
+- [Google AI Studio](https://aistudio.google.com) for Gemini
 
 ---
 
@@ -216,34 +178,26 @@ pnpm install
 
 ### 2. Environment Variables
 
-#### Backend — `apps/backend/.env`
+#### `apps/backend/.env`
 ```env
 NODE_ENV=development
 PORT=3001
-
-# Neon — copy from your Neon project dashboard
 DATABASE_URL="postgresql://user:password@ep-xxx.neon.tech/roommind?sslmode=require"
-
-# Redis Cloud — copy from your Redis Cloud dashboard
 REDIS_URL="redis://default:password@redis-xxx.cloud.redislabs.com:port"
-
-# Clerk — from clerk.com → your app → API Keys
 CLERK_SECRET_KEY="sk_test_xxx"
 CLERK_WEBHOOK_SECRET="whsec_xxx"
-
-# Google AI Studio
 GEMINI_API_KEY="AIzaSy_xxx"
 ```
 
-#### Worker — `apps/worker/.env`
+#### `apps/worker/.env`
 ```env
-DATABASE_URL="postgresql://..."    # same as backend
-REDIS_URL="redis://..."            # same as backend
+DATABASE_URL="postgresql://..."
+REDIS_URL="redis://..."
 GEMINI_API_KEY="AIzaSy_xxx"
 DEEPGRAM_API_KEY="xxx"
 ```
 
-#### Frontend — `apps/web/.env`
+#### `apps/web/.env`
 ```env
 VITE_API_URL="http://localhost:3001"
 VITE_WS_URL="ws://localhost:3001"
@@ -256,119 +210,54 @@ VITE_CLERK_PUBLISHABLE_KEY="pk_test_xxx"
 
 ```bash
 cd apps/backend
-
-# run migrations and generate Prisma client
 npx prisma migrate dev --name init
-
-# optional — open Prisma Studio to inspect your DB
-npx prisma studio
 ```
 
 ---
 
-### 4. Clerk Webhook (local)
-
-Clerk needs to reach your local backend to sync users on sign-up.
-Run this in a separate terminal:
+### 4. Clerk Webhook
 
 ```bash
 npx clerk webhooks listen --forward-to localhost:3001/api/webhooks/clerk
 ```
 
-This gives you a local tunnel and prints a `CLERK_WEBHOOK_SECRET` — 
-paste it into `apps/backend/.env`.
+Copy the printed `CLERK_WEBHOOK_SECRET` into `apps/backend/.env`.
 
 ---
 
-### 5. Run Everything
-
-Open four terminals:
+### 5. Run
 
 ```bash
-# Terminal 1 — backend
+# Terminal 1
 pnpm --filter @roommind/backend dev
 
-# Terminal 2 — frontend
+# Terminal 2
 pnpm --filter @roommind/web dev
 
-# Terminal 3 — Python worker
-cd apps/worker
-pip install -r requirements.txt
-celery -A src.queue.worker worker --loglevel=info
+# Terminal 3
+cd apps/worker && celery -A src.queue.worker worker --loglevel=info
 
-# Terminal 4 — Clerk webhook tunnel
+# Terminal 4
 npx clerk webhooks listen --forward-to localhost:3001/api/webhooks/clerk
 ```
 
-Or run backend and frontend together from the root:
-
-```bash
-pnpm dev    # runs all Node.js apps via Turborepo
-```
-
-App is running at → **http://localhost:5173**
+App runs at `http://localhost:5173`
 
 ---
 
 ## Deployment
 
-| Service | Platform | Config |
-|---|---|---|
-| Frontend | Vercel | Root: `apps/web`, Framework: Vite |
-| Backend | Railway | Root: `apps/backend`, uses `nixpacks.toml` |
-| Worker | Railway | Root: `apps/worker`, uses `Dockerfile` |
-| Database | Neon | Serverless PostgreSQL |
-| Redis | Redis Cloud | Managed Redis |
-
-### Production Environment Variables
-
-Set these in Railway (backend service):
-```
-NODE_ENV=production
-DATABASE_URL=       ← Neon production connection string
-REDIS_URL=          ← Redis Cloud connection string
-CLERK_SECRET_KEY=   ← Clerk production secret key
-CLERK_WEBHOOK_SECRET= ← from Clerk production webhook endpoint
-GEMINI_API_KEY=
-```
-
-Set these in Vercel (web app):
-```
-VITE_API_URL=https://your-backend.up.railway.app
-VITE_WS_URL=wss://your-backend.up.railway.app
-VITE_CLERK_PUBLISHABLE_KEY=  ← Clerk production publishable key
-```
-
-Run migrations against production DB once:
-```bash
-DATABASE_URL="your-neon-url" npx prisma migrate deploy
-```
+The frontend is deployed on **Vercel** and the backend and worker are deployed as separate services on **Railway**.
 
 ---
 
 ## Roadmap
 
 - [ ] Jira / Linear / Asana action item push integration
-- [ ] AI Whiteboards — auto-cluster sticky notes into project plans
-- [ ] Contextual Bookcases — RAG over internal PDFs and wiki pages
-- [ ] Speaker identity mapping — let users manually map Speaker 1 to a name
-- [ ] Mobile presence view
+- [ ] AI Whiteboards with auto-clustered sticky notes
+- [ ] Contextual Bookcases with RAG over internal PDFs and wiki pages
+- [ ] Speaker identity mapping so users can manually match Speaker 1 to a name
 - [ ] Custom office map builder
-
----
-
-## Contributing
-
-Pull requests are welcome. For major changes please open an issue first to discuss what you would like to change.
-
-```bash
-# create a feature branch
-git checkout -b feature/your-feature-name
-
-# make your changes, then
-git commit -m "feat: your feature description"
-git push origin feature/your-feature-name
-```
 
 ---
 
@@ -379,5 +268,5 @@ git push origin feature/your-feature-name
 ---
 
 <div align="center">
-  <sub>Built with ☕ and too many late nights.</sub>
+  <sub>Built with coffee and too many late nights.</sub>
 </div>
