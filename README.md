@@ -7,7 +7,7 @@
 
 Turn every meeting into captured decisions, assigned action items, and searchable team memory inside a shared 2D workspace your team actually lives in.
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-roommind.app-C4714A?style=for-the-badge&logoColor=white)](https://roommind.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-roommind.app-C4714A?style=for-the-badge&logoColor=white)](https://2-d-aiverse-web.app)
 [![License](https://img.shields.io/badge/License-MIT-6B8F6B?style=for-the-badge)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
