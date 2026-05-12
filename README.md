@@ -14,7 +14,7 @@ Turn every meeting into captured decisions, assigned action items, and searchabl
 
 <br />
 
-<img src="./docs/screenshots/landing-page.png" alt="RoomMind Office Canvas" width="100%" style="border-radius: 12px;" />
+<img src="./docs/screenshots/landing-page.PNG" alt="RoomMind Office Canvas" width="100%" style="border-radius: 12px;" />
 
 </div>
 
@@ -34,11 +34,11 @@ RoomMind combines a spatial 2D office canvas with an AI memory layer that listen
 
 | Office Canvas | Active Meeting Call |
 |:---:|:---:|
-| ![Canvas](./docs/screenshots/canvas-space.png) | ![Call](./docs/screenshots/active-call.png) |
+| ![Canvas](./docs/screenshots/canvas-space.PNG) | ![Call](./docs/screenshots/active-call.PNG) |
 
 | Meeting Summary | Memory Q&A |
 |:---:|:---:|
-| ![Summary](./docs/screenshots/meeting-summary.png) | ![Memory](./docs/screenshots/memory-qa.png) |
+| ![Summary](./docs/screenshots/meeting-summary.PNG) | ![Memory](./docs/screenshots/memory-qa.PNG) |
 
 </div>
 
