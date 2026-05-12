@@ -1,6 +1,5 @@
 <div align="center">
 
-<img src="./apps/web/public/assets/logo.png" alt="RoomMind Logo" width="80" />
 
 # RoomMind
 
@@ -15,7 +14,7 @@ Turn every meeting into captured decisions, assigned action items, and searchabl
 
 <br />
 
-<img src="./docs/screenshots/canvas-overview.png" alt="RoomMind Office Canvas" width="100%" style="border-radius: 12px;" />
+<img src="./docs/screenshots/landing-page.png" alt="RoomMind Office Canvas" width="100%" style="border-radius: 12px;" />
 
 </div>
 
@@ -35,7 +34,7 @@ RoomMind combines a spatial 2D office canvas with an AI memory layer that listen
 
 | Office Canvas | Active Meeting Call |
 |:---:|:---:|
-| ![Canvas](./docs/screenshots/canvas-overview.png) | ![Call](./docs/screenshots/active-call.png) |
+| ![Canvas](./docs/screenshots/canvas-space.png) | ![Call](./docs/screenshots/active-call.png) |
 
 | Meeting Summary | Memory Q&A |
 |:---:|:---:|
@@ -49,7 +48,7 @@ RoomMind combines a spatial 2D office canvas with an AI memory layer that listen
 
 ### Spatial 2D Office Canvas
 
-<img src="./docs/gifs/canvas-presence.gif" alt="Canvas Presence" width="100%" />
+<img src="./docs/gifs/canvas-space.gif" alt="Canvas Presence" width="100%" />
 
 A shared top-down office with four named zones: Meeting, Working, Knowledge, and Resting. Move your avatar freely between areas in real time and see teammates as live avatar dots with name tags and presence indicators. Real-time presence is powered by WebSockets and Redis pub/sub, broadcasting avatar positions and zone changes to all connected clients with zero event-loop blocking on the main server process.
 
@@ -57,7 +56,7 @@ A shared top-down office with four named zones: Meeting, Working, Knowledge, and
 
 ### AI Meeting Pipeline
 
-<img src="./docs/gifs/meeting-call.gif" alt="Meeting Call" width="100%" />
+<img src="./docs/gifs/meeting-summary.gif" alt="Meeting Call" width="100%" />
 
 Join a call inside the Meeting Area. Audio is captured via the browser MediaRecorder API in WebM/Opus format and transcribed with automatic speaker diarization via Deepgram. The transcription is chunked into rolling 5-minute segments and sent to Gemini 1.5 Pro for interim summarization, with chunk summaries stored temporarily in Redis. When the meeting ends, all chunk summaries are synthesized into a single structured final summary containing decisions, open questions, risks, and action items. The entire pipeline runs asynchronously through a Python/Celery worker over a BullMQ Redis queue so the WebSocket server is never blocked.
 
